@@ -273,7 +273,7 @@ class cMapEvents {
 	map_zoom() {				// View Zoom Level & Status Comment
 		let nowzoom = map.getZoom();
 		let message = `${glot.get("zoomlevel")}${map.getZoom()} `;
-		if (nowzoom < Conf.default.iconViewZoom) message += `<br>${glot.get("morezoom")}`;
+		if (nowzoom < Conf.default.act_iconViewZoom) message += `<br>${glot.get("morezoom")}`;
 		$("#zoomlevel").html("<h2 class='zoom'>" + message + "</h2>");
 	}
 }
