@@ -1,0 +1,203 @@
+{
+    "targets": [
+        "library"
+    ],
+    "_list_targets": [
+        "activity"
+    ],
+    "list_targets": [
+        "library_chronology"
+    ],
+    "default": {
+        "keep_default_view": false,
+        "default_view": [
+            37.169,
+            137.157
+        ],
+        "maxbounds": "",
+        "_maxbounds": [
+            [
+                35.09545,
+                135.86492
+            ],
+            [
+                34.94088,
+                136.11914
+            ]
+        ],
+        "initZoom": 5.5,
+        "pc_minZoom": 5,
+        "phone_minZoom": 5,
+        "maxZoom": 18,
+        "zoomSnap": 0.5,
+        "iconViewZoom": 11,
+        "act_iconViewZoom": 5,
+        "bookmark": true
+    },
+    "activities": {
+        "header": "",
+        "footer": "",
+        "form": {
+            "category": {
+                "glot": "act_category",
+                "type": "select",
+                "category": [
+                    "草津おみやげラボ",
+                    "暮らし（くらし）",
+                    "健康（けんこう）",
+                    "運動（うんどう）",
+                    "文化（ぶんか）",
+                    "魅力（みりょく）"
+                ],
+                "gsheet": "category"
+            },
+            "name": {
+                "glot": "act_name",
+                "type": "text",
+                "gsheet": "title"
+            },
+            "grade": {
+                "glot": "act_grade",
+                "type": "select",
+                "category": [
+                    "小学生未満",
+                    "小学1年生",
+                    "小学2年生",
+                    "小学3年生",
+                    "小学4年生",
+                    "小学5年生",
+                    "小学6年生",
+                    "中学生",
+                    "高校生",
+                    "大学/専門校生",
+                    "社会人"
+                ],
+                "gsheet": "grade"
+            },
+            "title": {
+                "glot": "act_title",
+                "type": "text",
+                "gsheet": "title"
+            },
+            "memo": {
+                "glot": "act_memo",
+                "type": "textarea",
+                "gsheet": "body"
+            },
+            "official_url": {
+                "glot": "act_official_url",
+                "type": "url",
+                "gsheet": "official_url"
+            },
+            "recommend_url": {
+                "glot": "act_recommend_url",
+                "type": "url",
+                "gsheet": "recommend_url"
+            },
+            "picture_url1": {
+                "glot": "act_picture_url1",
+                "type": "image_url",
+                "gsheet": "picture_url1"
+            },
+            "picture_url2": {
+                "glot": "act_picture_url2",
+                "type": "image_url",
+                "gsheet": "picture_url2"
+            },
+            "picture_url3": {
+                "glot": "act_picture_url3",
+                "type": "image_url",
+                "gsheet": "picture_url3"
+            },
+            "comment1": {
+                "glot": "act_quiz_comment",
+                "type": "comment",
+                "gsheet": ""
+            },
+            "quiz": {
+                "glot": "act_quiz",
+                "type": "quiz_textarea",
+                "gsheet": "quiz"
+            },
+            "quiz_choice1": {
+                "glot": "act_quiz_choice",
+                "type": "quiz_choice",
+                "gsheet": "quiz_choice1"
+            },
+            "quiz_choice2": {
+                "glot": "act_quiz_choice",
+                "type": "quiz_choice",
+                "gsheet": "quiz_choice2"
+            },
+            "quiz_choice3": {
+                "glot": "act_quiz_choice",
+                "type": "quiz_choice",
+                "gsheet": "quiz_choice3"
+            },
+            "quiz_answer": {
+                "glot": "act_quiz_answer",
+                "type": "quiz_choice",
+                "gsheet": "quiz_answer"
+            },
+            "quiz_hint_url": {
+                "glot": "act_quiz_hint_url",
+                "type": "quiz_hint_url",
+                "gsheet": "quiz_hint_url"
+            }
+        }
+    },
+    "google": {
+        "Analytics": "",
+        "AppScript": "https://script.google.com/macros/s/AKfycbw23b-Ymu9w7RavrcORhgDdSO6Ahg0xuN7XiDJZXs8cjbRROxFDSs0o68vLn7osnAZX/exec",
+        "targetName": "library_chronology"
+    },
+    "splash": {
+        "url": "./image/Ptoleme_2_by_Jean-Baptiste_de_Champaigne.jpg"
+    },
+    "static": {
+        "mode": true,
+        "osmjson": "./data/japan_library.json",
+        "osmbounds": {
+            "NW": {
+                "lat": 45.7392,
+                "lng": 119.0340
+            },
+            "SE": {
+                "lat": 20.5444,
+                "lng": 144.8863
+            }
+        }
+    },
+    "menu": [
+        {
+            "glot-model": "licence_title",
+            "linkto": "javascript:cMapmaker.licence()",
+            "divider": false
+        },
+        {
+            "glot-model": "about",
+            "linkto": "https://github.com/K-Sakanoshita/community_mapmaker",
+            "divider": false
+        },
+        {
+            "glot-model": "owner",
+            "linkto": "https://github.com/K-Sakanoshita/community_mapmaker",
+            "divider": true
+        },
+        {
+            "glot-model": "openstreetmap",
+            "linkto": "https://www.openstreetmap.org/about",
+            "divider": false
+        }
+    ],
+    "detail_menu": [
+        {
+            "glot-model": "act_add",
+            "linkto": "javascript:modal_activities.edit()",
+            "divider": false
+        }
+    ],
+    "detail_view": {
+        "openfirst": false
+    }
+}

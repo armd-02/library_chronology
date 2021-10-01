@@ -1,0 +1,126 @@
+{
+	"title": {
+		"ja": "図書館年表マップ",
+		"en": "Library chronology"
+	},
+	"subtitle": {
+		"ja": "Powered by Community Map Maker",
+		"en": "Powered by Community Map Maker"
+	},
+	"about": {
+		"ja": "図書館年表マップについて",
+		"en": "about Library chronology"
+	},
+	"owner": {
+		"ja": "開発サイト",
+		"en": "development site"
+	},
+	"openstreetmap": {
+		"ja": "OpenStreetMapについて",
+		"en": "about OpenStreetMap"
+	},
+	"licence_title": {
+		"ja": "利用規約",
+		"en": "Terms of Use"
+	},
+	"licence_message": {
+		"ja": "図書館年表マップのデータは <a href=\"https://creativecommons.org/share-your-work/public-domain/cc0\">CC0</a> で提供可能です。ご連絡ください。<br>",
+		"en": "Library chronology map data can be provided under <a href=\"https://creativecommons.org/share-your-work/public-domain/cc0\">CC0</a>. Please contact us."
+	},
+	"more_message": {
+		"ja": "",
+		"en": ""
+	},
+	"eventdates": {
+		"ja": "開催期間: ",
+		"en": "Event Dates: "
+	},
+	"activities": {
+		"ja": "各種活動",
+		"en": "Activities"
+	},
+	"libc": {
+		"ja": "年表",
+		"en": "chronology"
+	},
+	"children": {
+		"ja": "お宝",
+		"en": "Treasure"
+	},
+	"memories": {
+		"ja": "思い出など",
+		"en": "Memorials"
+	},
+	"act_grade": {
+		"ja": "学年",
+		"en": "Grade"
+	},
+	"act_title": {
+		"ja": "題名",
+		"en": "Subject"
+	},
+	"act_memo": {
+		"ja": "説明",
+		"en": "Detail"
+	},
+	"act_official_url": {
+		"ja": "草津おみやげラボURL",
+		"en": "Kusatsu Omiyage Labo URL"
+	},
+	"act_recommend_url": {
+		"ja": "オススメURL",
+		"en": "Recommend URL"
+	},
+	"act_picture_url1": {
+		"ja": "写真URL1",
+		"en": "Picture URL1"
+	},
+	"act_picture_url2": {
+		"ja": "写真URL2",
+		"en": "Picture URL2"
+	},
+	"act_picture_url3": {
+		"ja": "写真URL3",
+		"en": "Picture URL3"
+	},
+	"act_quiz_comment": {
+		"ja": "クイズを出したい人は、下に書いてね",
+		"en": "If you want to give a quiz, please write below"
+	},
+	"act_quiz": {
+		"ja": "クイズの問題",
+		"en": "Quiz questions"
+	},
+	"act_quiz_choice": {
+		"ja": "選択肢",
+		"en": "Choice"
+	},
+	"act_quiz_answer": {
+		"ja": "答え",
+		"en": "Answer"
+	},
+	"act_quiz_hint_url": {
+		"ja": "ヒントURL",
+		"en": "Hint URL"
+	},
+	"libc_title": {
+		"ja": "項目",
+		"en": "Subject"
+	},
+	"libc_agency": {
+		"ja": "機関",
+		"en": "Agency"
+	},
+	"libc_authority": {
+		"ja": "典拠",
+		"en": "Authority"
+	},
+	"libc_area": {
+		"ja": "地域",
+		"en": "Area"
+	},
+	"libc_ymd": {
+		"ja": "時期",
+		"en": "Around"
+	}
+}

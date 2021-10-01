@@ -1,0 +1,142 @@
+{
+    "marker_tag": {
+        "amenity": {
+            "library": "library.svg",
+            "bar": "bar.svg",
+            "bench": "bench.svg",
+            "cafe": "cafe.svg",
+            "drinking_water": "drinking-water.svg",
+            "fast_food": "fast-food.svg",
+            "food_court": "restaurant.svg",
+            "ice_cream": "ice-cream.svg",
+            "pub": "beer.svg",
+            "restaurant": "restaurant.svg",
+            "vending_machine": "vending_machine.svg",
+            "place_of_worship": "place-of-worship.svg",
+            "post_box": "post_box.svg",
+            "post_office": "post-JP.svg",
+            "school": "school-JP.svg",
+            "community_centre": "town-hall.svg"
+        },
+        "shop": {
+            "alcohol": "alcohol-shop.svg",
+            "bakery": "bakery.svg",
+            "beverages": "bottles.svg",
+            "brewing_supplies": "storage_fermenter.svg",
+            "butcher": "cleaver.svg",
+            "cheese": "cheese.svg",
+            "chocolate": "confectionery.svg",
+            "coffee": "hot_drink_cup.svg",
+            "confectionery": "confectionery.svg",
+            "convenience": "shopping-basket.svg",
+            "deli": "meat.svg",
+            "dairy": "cheese.svg",
+            "farm": "apple-alt.svg",
+            "frozen_food": "shop.svg",
+            "greengrocer": "carrot.svg",
+            "gift": "gift.svg",
+            "health_food": "shop.svg",
+            "ice_cream": "ice-cream.svg",
+            "pasta": "restaurant.svg",
+            "pastry": "bakery.svg",
+            "seafood": "restaurant-seafood.svg",
+            "spices": "spice_bottle.svg",
+            "tea": "teahouse.svg",
+            "water": "water.svg",
+            "wine": "alcohol-shop.svg",
+            "kiosk": "store.svg",
+            "supermarket": "grocery.svg",
+            "variety_store": "shop.svg"
+        },
+        "species": {
+            "Cherry blossom": "sakura.svg",
+            "Cerasus itosakura": "sakura.svg",
+            "Cerasus × yedoensis": "sakura.svg"
+        },
+        "natural": {
+            "tree": "park.svg"
+        },
+        "emergency": {
+            "fire_extinguisher": "fire-extinguisher.svg",
+            "fire_hydrant": "fire_hydrant.svg",
+            "defibrillator": "defibrillator.svg"
+        },
+        "highway": {
+            "traffic_signals": "signal.svg"
+        },
+        "social_facility": {
+            "shelter": "shelter.svg"
+        },
+        "assembly_point:tsunami": {
+            "yes": "shelter.svg"
+        },
+        "wikipedia": {
+            "*": "wikipedia.svg"
+        },
+        "attraction": {
+            "animal": "veterinary.svg"
+        },
+        "playground": {
+            "structure": "play_structure.svg",
+            "slide": "slide.svg",
+            "climbingframe": "playground.svg",
+            "climbingwall": "playground.svg",
+            "balancebeam": "playground.svg",
+            "playhouse": "play_structure.svg",
+            "sandpit": "playground.svg",
+            "hopscotch": "playground.svg",
+            "teenshelter": "playground.svg",
+            "sledding": "playground.svg",
+            "youth_bench": "bench.svg",
+            "map": "playground.svg",
+            "swing": "playground.svg",
+            "basketswing": "playground.svg",
+            "basketrotator": "playground.svg",
+            "aerialrotator": "playground.svg",
+            "seesaw": "playground.svg",
+            "springy": "playground.svg",
+            "trampoline": "playground.svg",
+            "roundabout": "playground.svg",
+            "cushion": "playground.svg",
+            "zipwire": "playground.svg",
+            "water": "playground.svg",
+            "splash_pad": "playground.svg",
+            "horizontal_bar": "playground.svg",
+            "activitypanel": "playground.svg",
+            "exercise": "playground.svg"
+        },
+        "tourism": {
+            "viewpoint": "spotting_scope.svg",
+            "artwork": "art-gallery.svg",
+            "information": "information.svg",
+            "museum": "museum.svg"
+        },
+        "historic": {
+            "memorial": "monument.svg"
+        },
+        "information": {
+            "board": "info_board.svg",
+            "terminal": "app_terminal.svg",
+            "audioguide": "information.svg",
+            "map": "info_board.svg",
+            "tactile_map": "info_board.svg",
+            "guidepost": "map-signs.svg"
+        },
+        "man_made": {
+            "torii": "shinto.svg",
+            "lamp": "lantern.svg"
+        },
+        "leisure": {
+            "pitch": "pitch.svg",
+            "park": "tree_and_bench.svg",
+            "playground": "playground.svg",
+            "amusement_arcade": "gaming.svg"
+        },
+        "railway": {
+            "station": "train.svg"
+        },
+        "public_transport": {
+            "station": "train.svg"
+        }
+    }
+}
