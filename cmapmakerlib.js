@@ -119,147 +119,150 @@ var poiCont = (function () {
 	};
 })();
 
-var Marker = (function () {								// Marker closure
-	var markers = {};
+class PoiMarker {
 
-	return {
-		markers: () => { return markers },
-		set: (target, actonly) => {								// Poi表示
-			console.log("Marker.set: " + target);
-			Marker.delete(target);
-			markers[target] = [];
-			let LL = GeoCont.get_LL();
-			let all = poiCont.get_target(target);
-			if (all.pois.geojson !== undefined) {		// pois表示
-				all.pois.geojson.forEach(function (geojson, idx) {
-					let poi = { "geojson": all.pois.geojson[idx], "targets": all.pois.targets[idx], "latlng": all.pois.latlng[idx], "enable": all.pois.enable[idx] };
-					if (poi.enable && GeoCont.check_inner(poi.latlng, LL)) {
-						let actlists = poiCont.get_actlist(poi.geojson.id);
-						let actflag = (actonly && actlists.length > 0) ? true : !actonly;
-						if (actflag) {
-							make_marker({ target: target, poi: poi, act: all.acts, langname: 'name' }).then(marker => {
-								if (marker !== undefined) marker.forEach(val => markers[target].push(val));	// 複数Marker対応(Wikipediaの解説など)
-							});
-						};
-					};
-				});
-			};
-		},
+	constructor() {
+		this.markers = {};
+	};
 
-		get: (target, osmid) => {				// Poi取得
-			let idx = markers[target].findIndex(val => val.mapmaker_id == osmid);
-			let marker = markers[target][idx];
-			return marker;
-		},
-		qr_add: (target, osmid, url, latlng, text) => {
-			let idx = markers[target].findIndex(val => val.mapmaker_id == osmid);
-			let qrcode = new QRCode({ content: url, join: true, container: "svg", width: 128, height: 128 });
-			let data = qrcode.svg();
-			let icon = L.divIcon({ "className": "icon", "iconSize": [512, 128], "html": `<div class="d-flex"><div class="flex-row">${data}</div><div class="p-2 bg-light"><span>${text}</span></div></div>` });
-			let qr_marker = L.marker(new L.LatLng(latlng.lat, latlng.lng), { icon: icon, draggable: true });
-			qr_marker.addTo(map);
-			qr_marker.mapmaker_id = osmid + "-qr";
-			qr_marker.mapmaker_key = target;
-			qr_marker.mapmaker_svg = qrcode.svg;
-			markers[target][idx] = [markers[target][idx], qr_marker];
-			map.closePopup();
-		},
+	set(target, actonly) {								// Poi表示
 
-		center: (poiid) => {								// Map move to PoiId & Zoom(config)
+		const make_marker = function (params) {		// Make Marker(Sometimes multiple markers are returned)
 			return new Promise((resolve, reject) => {
-				let poi = poiCont.get_osmid(poiid);
-				let zoomlv = Conf.default.act_iconViewZoom >= map.getZoom() ? Conf.default.act_iconViewZoom : map.getZoom();
-				if (poi !== undefined) {	// poi = osmid
-					map.flyTo(poi.latlng, zoomlv, { animate: true, duration: 1 });
-				} else {					// poi = actid
-					poi = poiCont.get_actid(poiid);
-					let osmid = poiCont.get_osmid(poi.osmid);
-					if (osmid !== undefined) {	// Found Poi
-						map.flyTo(osmid.latlng, zoomlv, { animate: true, duration: 1 });
-						cMapmaker.detail_view(poi.osmid, poiid);
-						resolve();
-					} else {						// Not Found Poi
-						winCont.spinner(true);
-						OvPassCnt.get_osmid(poi.osmid).then((geojson) => {
-							poiCont.add_geojson(geojson);
-							osmid = poiCont.get_osmid(poi.osmid);
-							map.flyTo(osmid.latlng, zoomlv, { animate: true, duration: 1 });
-							cMapmaker.detail_view(poi.osmid, poiid);
-							winCont.spinner(false);
-							resolve();
-						}).catch((e) => {
-							console.log(e);
-							alert(glot.get("sverror_message"));
-							winCont.spinner(false);
-							reject();
+				let categorys = Object.keys(Conf.category), icon_name, name;
+				let tags = params.poi.geojson.properties.tags == undefined ? params.poi.geojson.properties : params.poi.geojson.properties.tags;
+				name = tags[params.langname] == undefined ? tags.name : tags[params.langname];
+				name = (name == "" || name == undefined) ? "" : name;
+
+				let keyn = categorys.find(key => tags[key] !== undefined);
+				try {
+					var keyv = (keyn !== undefined) ? Conf.marker_tag[keyn][tags[keyn]] : undefined;
+				} catch {
+					console.log("name" + ": " + keyn + "=" + tags[keyn]);
+				};
+				let actlists = poiCont.get_actlist(params.poi.geojson.id);
+				if (keyn !== undefined && keyv !== undefined) {	// in category
+					icon_name = params.filename == undefined ? Conf.marker_tag[keyn][tags[keyn]] : params.filename;
+					let size, html = `<div class="d-flex align-items-center">`;
+					let span_width = name !== "" ? name.length * Conf.effect.text.size : 0;
+					let css_name = actlists.length > 0 ? "icon_attention" : "icon_normal";
+					size = parseInt(basic.getStyleSheetValue(css_name, "height"));
+					if (actlists.length > 0) html += `<img class="attention" src="./image/attention_noframe.svg">`;
+					html += `<img class="${css_name}" src="./${Conf.icon.path}/${icon_name}" icon-name="${name}">`;
+					let span = `<span class="icon" style="font-size: ${Conf.effect.text.size}px">${name}</span>`;
+					if (name !== "" && Conf.effect.text.view) html += span;
+					let icon = L.divIcon({ "className": "", "iconSize": [size + span_width, size], "iconAnchor": [size / 2, size / 2], "html": html + "</div>" });
+					let marker = L.marker(new L.LatLng(params.poi.latlng[0], params.poi.latlng[1]), { icon: icon, draggable: false });
+					marker.addTo(map).on('click', e => { cMapmaker.detail_view(e.target.mapmaker_id) });
+					marker.mapmaker_id = params.poi.geojson.id;
+					marker.mapmaker_key = params.target;
+					marker.mapmaker_lang = params.langname;
+					// tags.mapmaker_icon = icon_name;		// tagに紛れ込ませる(detail_viewで利用)
+					resolve([marker]);
+				};
+			});
+		};
+
+		console.log("Marker.set: " + target);
+		poiMarker.delete(target);
+		poiMarker.markers[target] = [];
+		let LL = GeoCont.get_LL();
+		let all = poiCont.get_target(target);
+		if (all.pois.geojson !== undefined) {		// pois表示
+			all.pois.geojson.forEach(function (geojson, idx) {
+				let poi = { "geojson": all.pois.geojson[idx], "targets": all.pois.targets[idx], "latlng": all.pois.latlng[idx], "enable": all.pois.enable[idx] };
+				if (poi.enable && GeoCont.check_inner(poi.latlng, LL)) {
+					let actlists = poiCont.get_actlist(poi.geojson.id);
+					let actflag = (actonly && actlists.length > 0) ? true : !actonly;
+					if (actflag) {
+						make_marker({ target: target, poi: poi, act: all.acts, langname: 'name' }).then(marker => {
+							if (marker !== undefined) marker.forEach(val => poiMarker.markers[target].push(val));	// 複数Marker対応(Wikipediaの解説など)
 						});
 					};
-				}
-			});
-		},
-
-		all_clear: () => Object.keys(markers).forEach((target) => Marker.delete(target)),	// all delete
-
-		delete: (target, osmid) => {														// Marker delete * don't set pdata
-			if (osmid == undefined || osmid == "") {	// all osmid
-				if (markers[target] !== undefined) {
-					markers[target].forEach(marker => delmaker(marker));
-					markers[target] = [];
 				};
-			} else {									// delete osmid
-				let idx = markers[target].findIndex(vals => {
-					let val = vals.length == undefined ? vals : vals[0];
-					return val.mapmaker_id == osmid;
-				});
-				delmaker(markers[target][idx]);
-			};
-			map.closePopup();
+			});
+		};
+	}
 
-			function delmaker(marker) {	// 実際にマーカーを消す処理
-				if (marker == undefined) return;
-				if (marker.length == undefined) { map.removeLayer(marker); return };
-				marker.forEach(m => map.removeLayer(m));								// qr_code で markerが複数ある場合
-			};
-		}
-	};
+	get(target, osmid) {				// Poi取得
+		let idx = poiMarker.markers[target].findIndex(val => val.mapmaker_id == osmid);
+		let marker = poiMarker.markers[target][idx];
+		return marker;
+	}
+	qr_add(target, osmid, url, latlng, text) {
+		let idx = poiMarker.markers[target].findIndex(val => val.mapmaker_id == osmid);
+		let qrcode = new QRCode({ content: url, join: true, container: "svg", width: 128, height: 128 });
+		let data = qrcode.svg();
+		let icon = L.divIcon({ "className": "icon", "iconSize": [512, 128], "html": `<div class="d-flex"><div class="flex-row">${data}</div><div class="p-2 bg-light"><span>${text}</span></div></div>` });
+		let qr_marker = L.marker(new L.LatLng(latlng.lat, latlng.lng), { icon: icon, draggable: true });
+		qr_marker.addTo(map);
+		qr_marker.mapmaker_id = osmid + "-qr";
+		qr_marker.mapmaker_key = target;
+		qr_marker.mapmaker_svg = qrcode.svg;
+		poiMarker.markers[target][idx] = [poiMarker.markers[target][idx], qr_marker];
+		map.closePopup();
+	}
 
-	function make_marker(params) {		// Make Marker(Sometimes multiple markers are returned)
+	select(poiid, detail) {								// Map move to PoiId & Zoom(config)
 		return new Promise((resolve, reject) => {
-			let categorys = Object.keys(Conf.category), icon_name, name;
-			let tags = params.poi.geojson.properties.tags == undefined ? params.poi.geojson.properties : params.poi.geojson.properties.tags;
-			name = tags[params.langname] == undefined ? tags.name : tags[params.langname];
-			name = (name == "" || name == undefined) ? "" : name;
-
-			let keyn = categorys.find(key => tags[key] !== undefined);
-			try {
-				var keyv = (keyn !== undefined) ? Conf.marker_tag[keyn][tags[keyn]] : undefined;
-			} catch {
-				console.log("name" + ": " + keyn + "=" + tags[keyn]);
-			};
-			let actlists = poiCont.get_actlist(params.poi.geojson.id);
-			if (keyn !== undefined && keyv !== undefined) {	// in category
-				icon_name = params.filename == undefined ? Conf.marker_tag[keyn][tags[keyn]] : params.filename;
-				let size, html = `<div class="d-flex align-items-center">`;
-				let span_width = name !== "" ? name.length * Conf.effect.text.size : 0;
-				let css_name = actlists.length > 0 ? "icon_attention" : "icon_normal";
-				size = parseInt(basic.getStyleSheetValue(css_name, "height"));
-				if (actlists.length > 0) html += `<img class="attention" src="./image/attention_noframe.svg">`;
-				html += `<img class="${css_name}" src="./${Conf.icon.path}/${icon_name}" icon-name="${name}">`;
-				let span = `<span class="icon" style="font-size: ${Conf.effect.text.size}px">${name}</span>`;
-				if (name !== "" && Conf.effect.text.view) html += span;
-				let icon = L.divIcon({ "className": "", "iconSize": [size + span_width, size], "iconAnchor": [size / 2, size / 2], "html": html + "</div>" });
-				let marker = L.marker(new L.LatLng(params.poi.latlng[0], params.poi.latlng[1]), { icon: icon, draggable: false });
-				marker.addTo(map).on('click', e => { cMapmaker.detail_view(e.target.mapmaker_id) });
-				marker.mapmaker_id = params.poi.geojson.id;
-				marker.mapmaker_key = params.target;
-				marker.mapmaker_lang = params.langname;
-				// marker.mapmaker_icon = icon_name;
-				tags.mapmaker_icon = icon_name;		// tagにも紛れ込ませる(detail_viewで利用)
-				resolve([marker]);
-			};
+			let poi = poiCont.get_osmid(poiid);
+			let zoomlv = Conf.default.act_iconViewZoom >= map.getZoom() ? Conf.default.act_iconViewZoom : map.getZoom();
+			if (poi !== undefined) {	// poi = osmid
+				map.flyTo(poi.latlng, zoomlv, { animate: true, duration: 0.5 });
+				if (detail) cMapmaker.detail_view(poiid, poiid);
+				resolve();
+			} else {					// poi = actid
+				poi = poiCont.get_actid(poiid);
+				let osmid = poiCont.get_osmid(poi.osmid);
+				if (osmid !== undefined) {	// Found Poi
+					map.flyTo(osmid.latlng, zoomlv, { animate: true, duration: 0.5 });
+					if (detail) cMapmaker.detail_view(poi.osmid, poiid);
+					resolve();
+				} else {						// Not Found Poi
+					winCont.spinner(true);
+					OvPassCnt.get_osmid(poi.osmid).then((geojson) => {
+						poiCont.add_geojson(geojson);
+						osmid = poiCont.get_osmid(poi.osmid);
+						map.flyTo(osmid.latlng, zoomlv, { animate: true, duration: 0.5 });
+						if (detail) cMapmaker.detail_view(poi.osmid, poiid);
+						winCont.spinner(false);
+						resolve();
+					}).catch((e) => {
+						console.log(e);
+						alert(glot.get("sverror_message"));
+						winCont.spinner(false);
+						reject();
+					});
+				};
+			}
 		});
-	};
-})();
+	}
+
+	all_clear() { Object.keys(poiMarker.markers).forEach((target) => poidelete(target)) }	// all delete
+
+	delete(target, osmid) {														// Marker delete * don't set pdata
+		if (osmid == undefined || osmid == "") {	// all osmid
+			if (poiMarker.markers[target] !== undefined) {
+				poiMarker.markers[target].forEach(marker => delmaker(marker));
+				poiMarker.markers[target] = [];
+			};
+		} else {									// delete osmid
+			let idx = poiMarker.markers[target].findIndex(vals => {
+				let val = vals.length == undefined ? vals : vals[0];
+				return val.mapmaker_id == osmid;
+			});
+			delmaker(poiMarker.markers[target][idx]);
+		};
+		map.closePopup();
+
+		function delmaker(marker) {	// 実際にマーカーを消す処理
+			if (marker == undefined) return;
+			if (marker.length == undefined) { map.removeLayer(marker); return };
+			marker.forEach(m => map.removeLayer(m));								// qr_code で markerが複数ある場合
+		};
+	}
+};
+var poiMarker = new PoiMarker;
 
 // listTable管理(イベントやPoi情報を表示)
 class ListTable {
@@ -267,10 +270,11 @@ class ListTable {
 	constructor() {
 		this.grid;
 		this.columns = [];
-		this.lock_mode = false;
+		this.lock = false;		// true then disable listtable
 		this.list = [];
 		this.timeout;
 		this.height;
+		this.flist;
 	};
 
 	init() { // dataListに必要な初期化
@@ -283,50 +287,75 @@ class ListTable {
 				listTable.timeout = 0;
 			};
 			listTable.timeout = window.setTimeout(() => {
-				let flist = listTable._filter(listTable.list, keyword.value);
-				listTable.grid.updateConfig({ "data": flist }).forceRender(document.getElementById("tableid"));
+				listTable.flist = listTable._filter(listTable.list, list_keyword.value);
+				listTable.grid.updateConfig({ "data": listTable.flist }).forceRender(document.getElementById("tableid"));
 				cMapmaker.mode_change('list');
 			}, 500);
 		};
-		keyword.removeEventListener('change', keyword_change);
-		keyword.addEventListener('change', keyword_change);
+		list_keyword.removeEventListener('change', keyword_change);
+		list_keyword.addEventListener('change', keyword_change);
 
 		function category_change() {        			// カテゴリ名でキーワード検索
-			let flist = category_list.value !== "-" ? listTable._filter(listTable.list, category_list.value) : listTable.list;
-			listTable.grid.updateConfig({ "data": flist }).forceRender(document.getElementById("tableid"));
+			listTable.flist = list_category.value !== "-" ? listTable._filter(listTable.list, list_category.value) : listTable.list;
+			listTable.grid.updateConfig({ "data": listTable.flist }).forceRender(document.getElementById("tableid"));
 			cMapmaker.mode_change('list');
 		};
-		category_list.removeEventListener('change', category_change);
-		category_list.addEventListener('change', category_change);
+		list_category.removeEventListener('change', category_change);
+		list_category.addEventListener('change', category_change);
 	};
 
-	make(targets) {  							// リスト表示
-		if (listTable.grid !== undefined) listTable.grid.destroy();
+	make(targets) {  									// リスト表示
 		listTable.list = poiCont.list(targets);
-		listTable.grid = new gridjs.Grid({
-			"columns": listTable.columns, "data": listTable.list, "resizable": true, "height": listTable.height,
-			sort: true, fixedHeader: true
-		});
-		listTable.grid.render(document.getElementById("tableid"));
+		listTable.flist = listTable.list;
 		listTable._categorys(listTable.list);
+		let option = { "columns": listTable.columns, "data": listTable.list, "height": listTable.height, sort: true, fixedHeader: true };
+		if (listTable.grid !== undefined){
+			listTable.grid.updateConfig(option).forceRender(document.getElementById("tableid"));
+		}else{
+			listTable.grid = new gridjs.Grid(option).render(document.getElementById("tableid"));
+		};
 		listTable.grid.on('rowClick', (...args) => {
-			if (!listTable.lock_mode) {
-				listTable.lock_mode = true;
+			console.log("listTable: rowClick start");
+			if (!listTable.lock) {
+				listTable.lock = true;
 				winCont.spinner(true);
 				try {
-					var data = args[1].cell(0).data;
-					Marker.center(data).then(() => {
-						console.log("OK");
+					let actid = args[1].cell(0).data;
+					listTable.select(actid);
+					poiMarker.select(actid, true).then(() => {
+						console.log("listTable: rowClick OK");
 					}).catch(() => {
-						console.log("NG");
-					}).then(() => { listTable.lock_mode = false });
+						console.log("listTable: rowClick NG");
+					}).then(() => { listTable.lock = false });
 				} catch (error) {
 					winCont.spinner(false);
-					listTable.lock_mode = false;
-				}
+					listTable.lock = false;
+				};
 			};
 		});
 	};
+
+	disabled(mode) {
+		list_category.disabled = mode;
+		list_keyword.disabled = mode;
+		listTable.lock = mode;
+	};
+
+	heightSet(height) {									// set table height
+		listTable.grid.updateConfig({ "height": height }).forceRender(document.getElementById("tableid"));
+		cMapmaker.mode_change('list');
+	};
+
+	select(actid) {									// リスト選択
+		let rows = document.getElementsByClassName('gridjs-tr selected');
+		if (rows.length > 0) Array.from(rows).forEach(row => { row.classList.remove("selected") });
+		let lstidx = listTable.flist.findIndex(elm => elm[0] === actid);
+		if (lstidx > -1) {
+			let row = document.querySelector("#tableid table").rows[lstidx + 1];
+			row.classList.add("selected");
+			row.scrollIntoView({ behavior: "smooth", block: "end", inline: "nearest" });
+		}
+	}
 
 	_filter(result, keyword) {						// 指定したキーワードで絞り込み
 		return result.filter((row) => {
@@ -335,10 +364,10 @@ class ListTable {
 	};
 
 	_categorys(result) {    						// resultを元に種別リストを作成
-		winCont.select_clear(`category_list`);
+		winCont.select_clear(`list_category`);
 		let pois = result.map(data => { return data[2] });
 		pois = pois.filter((x, i, self) => { return self.indexOf(x) === i });
-		pois.map(poi => winCont.select_add(`category_list`, poi, poi));
+		pois.map(poi => winCont.select_add(`list_category`, poi, poi));
 	};
 
 };

@@ -2,12 +2,12 @@
     "targets": [
         "library"
     ],
-    "_list_targets": [
-        "activity"
-    ],
-    "list_targets": [
-        "library_chronology"
-    ],
+    "listTable": {
+        "targets": [
+            "lib_chronology"
+        ],
+        "update_mode": "static"
+    },
     "default": {
         "keep_default_view": false,
         "default_view": [
@@ -33,6 +33,10 @@
         "iconViewZoom": 11,
         "act_iconViewZoom": 5,
         "bookmark": true
+    },
+    "playback": {
+        "zoomLevel": 13,
+        "timer": 4000
     },
     "activities": {
         "header": "",
@@ -149,7 +153,7 @@
     "google": {
         "Analytics": "",
         "AppScript": "https://script.google.com/macros/s/AKfycbw23b-Ymu9w7RavrcORhgDdSO6Ahg0xuN7XiDJZXs8cjbRROxFDSs0o68vLn7osnAZX/exec",
-        "targetName": "library_chronology"
+        "targetName": "lib_chronology"
     },
     "splash": {
         "url": "./image/Ptoleme_2_by_Jean-Baptiste_de_Champaigne.jpg"

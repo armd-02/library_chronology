@@ -52,6 +52,15 @@ class Leaflet {
 
     };
 
+    start() {
+        ["dragging", "touchZoom", "touchZoom"].forEach(key => map[key].enable());
+        this.Control["maps"].addTo(map);
+        this.Control["locate"].addTo(map);
+        map.zoomControl.addTo(map);
+        if (map.tap) map.tap.enable();
+        document.getElementById('mapid').style.cursor = 'grab';
+    };
+
     stop() {
         ["dragging", "touchZoom", "touchZoom"].forEach(key => map[key].disable());
         this.Control["maps"].remove(map);
@@ -61,13 +70,8 @@ class Leaflet {
         document.getElementById('mapid').style.cursor = 'default';
     };
 
-    start() {
-        ["dragging", "touchZoom", "touchZoom"].forEach(key => map[key].enable());
-        this.Control["maps"].addTo(map);
-        this.Control["locate"].addTo(map);
-        map.zoomControl.addTo(map);
-        if (map.tap) map.tap.enable();
-        document.getElementById('mapid').style.cursor = 'grab';
+    zoomSet(zoomlv) {
+        map.flyTo(map.getCenter(), zoomlv, { animate: true, duration: 0.5 });
     };
 
     controlAdd(position, domid, html, css) {     // add leaflet control
