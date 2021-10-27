@@ -35,7 +35,7 @@
         "bookmark": true
     },
     "playback": {
-        "zoomLevel": 13,
+        "zoomLevel": 15,
         "timer": 4000
     },
     "activities": {
@@ -180,13 +180,18 @@
         },
         {
             "glot-model": "about",
-            "linkto": "https://github.com/K-Sakanoshita/community_mapmaker",
+            "linkto": "https://github.com/armd-02/library_chronology",
             "divider": false
+        },
+        {
+            "glot-model": "library-redesign",
+            "linkto": "https://library-redesign.main.jp/",
+            "divider": true
         },
         {
             "glot-model": "owner",
             "linkto": "https://github.com/K-Sakanoshita/community_mapmaker",
-            "divider": true
+            "divider": false
         },
         {
             "glot-model": "openstreetmap",
@@ -196,8 +201,8 @@
     ],
     "detail_menu": [
         {
-            "glot-model": "act_add",
-            "linkto": "javascript:modal_activities.edit()",
+            "glot-model": "button_close",
+            "linkto": "javascript:winCont.modal_close()",
             "divider": false
         }
     ],

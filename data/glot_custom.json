@@ -11,8 +11,12 @@
 		"ja": "図書館年表マップについて",
 		"en": "about Library chronology"
 	},
+	"library-redesign": {
+		"ja": "「図書館」（仮称）リ・デザイン会議について",
+		"en": "about Library Redesign Conference"
+	},
 	"owner": {
-		"ja": "開発サイト",
+		"ja": "コミュニティマップメーカー開発サイト",
 		"en": "development site"
 	},
 	"openstreetmap": {
@@ -24,8 +28,8 @@
 		"en": "Terms of Use"
 	},
 	"licence_message": {
-		"ja": "図書館年表マップのデータは <a href=\"https://creativecommons.org/share-your-work/public-domain/cc0\">CC0</a> で提供可能です。ご連絡ください。<br>",
-		"en": "Library chronology map data can be provided under <a href=\"https://creativecommons.org/share-your-work/public-domain/cc0\">CC0</a>. Please contact us."
+		"ja": "図書館年表マップのデータは <a href=\"https://creativecommons.org/share-your-work/public-domain/cc0\">CC0</a> で提供されています。<br>「図書館」（仮称）リ・デザイン会議のサイトを御覧ください。",
+		"en": "Library chronology map data can be provided under <a href=\"https://creativecommons.org/share-your-work/public-domain/cc0\">CC0</a>.<br>Please see the site of the Library Redesign Conference."
 	},
 	"more_message": {
 		"ja": "",

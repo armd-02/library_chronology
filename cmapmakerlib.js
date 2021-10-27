@@ -297,7 +297,7 @@ class ListTable {
 
 		function category_change() {        			// カテゴリ名でキーワード検索
 			listTable.flist = list_category.value !== "-" ? listTable._filter(listTable.list, list_category.value) : listTable.list;
-			listTable.grid.updateConfig({ "data": listTable.flist }).forceRender(document.getElementById("tableid"));
+			listTable.grid.updateConfig({ "data": listTable.flist, "autoWidth": false }).forceRender(document.getElementById("tableid"));
 			cMapmaker.mode_change('list');
 		};
 		list_category.removeEventListener('change', category_change);
@@ -308,10 +308,10 @@ class ListTable {
 		listTable.list = poiCont.list(targets);
 		listTable.flist = listTable.list;
 		listTable._categorys(listTable.list);
-		let option = { "columns": listTable.columns, "data": listTable.list, "height": listTable.height, sort: true, fixedHeader: true };
-		if (listTable.grid !== undefined){
+		let option = { "columns": listTable.columns, "data": listTable.list, "height": listTable.height, sort: true, fixedHeader: true, "autoWidth": false };
+		if (listTable.grid !== undefined) {
 			listTable.grid.updateConfig(option).forceRender(document.getElementById("tableid"));
-		}else{
+		} else {
 			listTable.grid = new gridjs.Grid(option).render(document.getElementById("tableid"));
 		};
 		listTable.grid.on('rowClick', (...args) => {
