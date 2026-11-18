@@ -218,6 +218,7 @@
         "relativePath": "",
         "showPersonalMemo": false,
         "showVisited": false,
+        "showFavorite": false,
         "editModeSwitch": false,
         "localSave": "library-chronology",
         "reverseIcon": false,

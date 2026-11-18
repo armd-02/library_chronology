@@ -155,3 +155,7 @@ img.slide {
 #listArea .list-group {
     --bs-list-group-bg: rgba(255, 255, 255, 0.72);
 }
+
+#listArea .list-facility-item:not(:has(> .list-status-button)) {
+    padding-right: .75rem;
+}

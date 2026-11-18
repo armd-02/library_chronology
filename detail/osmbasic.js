@@ -177,27 +177,30 @@ class OSMbasic {
             ? `<div class="flex-row mt-1 me-3"><a class="btn btn-sm btn-outline-primary" href="${directionsUrl.replace(/&/g, "&amp;")}" target="_blank" rel="noopener noreferrer" title="${glot.get("directions_google_maps")}"><i class="fa-solid fa-route me-1" aria-hidden="true"></i>${glot.get("directions_open")}</a></div>`
             : "";
 
-        // 既に行ったかチェック
-        if (Conf.etc.localSave !== "") {
+        const hasPersonalControls = Conf.etc.localSave !== ""
+            && (Conf.etc.showVisited !== false || Conf.etc.showFavorite !== false || Conf.etc.showPersonalMemo !== false);
+        if (hasPersonalControls) {
             let poiStatus = poiStatusCont.getValueByOSMID(tags.id)
             const escapeAttr = value => String(value).replace(/[&"<>']/g, char =>
                 ({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;", "'": "&#39;" })[char]);
             if (Conf.etc.showVisited !== false) {
                 html += `<div class="flex-row mt-1 me-3"><button type="button" id="visited" class="poi-status-toggle btn btn-sm" name="${escapeAttr(tags.id)}" aria-pressed="${Boolean(poiStatus[PoiStatusIndex.VISITED])}" onclick="cMapMaker.togglePoiStatus('visited')"><i class="${poiStatus[PoiStatusIndex.VISITED] ? "fa-solid" : "fa-regular"} fa-circle-check fa-fw" aria-hidden="true"></i> ${glot.get("visited")}</button></div>`;
             }
-            html += `<div class="flex-row mt-1 me-3"><button type="button" id="favorite" class="poi-status-toggle btn btn-sm" name="${escapeAttr(tags.id)}" aria-pressed="${Boolean(poiStatus[PoiStatusIndex.FAVORITE])}" onclick="cMapMaker.togglePoiStatus('favorite')"><i class="${poiStatus[PoiStatusIndex.FAVORITE] ? "fa-solid" : "fa-regular"} fa-heart fa-fw" aria-hidden="true"></i> ${glot.get("favorite")}</button>`;
-            html += `</div>${directionsHtml}`;
+            if (Conf.etc.showFavorite !== false) {
+                html += `<div class="flex-row mt-1 me-3"><button type="button" id="favorite" class="poi-status-toggle btn btn-sm" name="${escapeAttr(tags.id)}" aria-pressed="${Boolean(poiStatus[PoiStatusIndex.FAVORITE])}" onclick="cMapMaker.togglePoiStatus('favorite')"><i class="${poiStatus[PoiStatusIndex.FAVORITE] ? "fa-solid" : "fa-regular"} fa-heart fa-fw" aria-hidden="true"></i> ${glot.get("favorite")}</button></div>`;
+            }
+            html += directionsHtml;
             if (Conf.etc.showPersonalMemo !== false) {
                 const memo = poiStatus[PoiStatusIndex.MEMO] ?? "";
                 html += `<div class="flex-row mt-1 me-3 d-flex text-nowrap align-items-center w-100">`;
                 html += `<label for="visited-memo" class="ms-2 me-2">${glot.get("personal_memo_label")}</label>`;
-                html += `<input type="text" id="visited-memo" maxlength="140" size="20" class="form-control" oninput="cMapMaker.savePoiStatus()" value="${escapeAttr(memo)}" /></div>`;
+                html += `<input type="text" id="visited-memo" name="${escapeAttr(tags.id)}" maxlength="140" size="20" class="form-control" oninput="cMapMaker.savePoiStatus()" value="${escapeAttr(memo)}" /></div>`;
             }
             elements++;
         }
 
         if (directionsHtml) {
-            if (Conf.etc.localSave === "") html += directionsHtml;
+            if (!hasPersonalControls) html += directionsHtml;
             elements++;
         }
 

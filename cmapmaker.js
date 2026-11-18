@@ -556,7 +556,8 @@ class CMapMaker extends IndoorControl {
                     cMapMaker.showMapTitleWhenReady(mapLibre.selectStyle);
                     const mergedMenu = [...Conf.menu.main, ...Conf.menu.mainSystem];
                     winCont.menu_make(mergedMenu, "main_menu");
-                    if (Conf.areaSearch.use === true || Conf.etc.localSave) {
+                    if (Conf.areaSearch.use === true || (Conf.etc.localSave
+                        && (Conf.etc.showVisited !== false || Conf.etc.showFavorite !== false))) {
                         document.getElementById("main_menu").insertAdjacentHTML("afterbegin", `
                             <button class="dropdown-item d-flex align-items-center gap-2" type="button"
                                 id="poiFilterButton" onclick="poiFilterController.open('search')"
@@ -589,6 +590,9 @@ class CMapMaker extends IndoorControl {
                     areaSearchController.init();
                     const listModes = document.querySelector(".place-list-mode");
                     if (listModes) listModes.hidden = !Conf.etc.localSave;
+                    if (Conf.etc.showFavorite === false) {
+                        document.querySelector('#listDisplayMode option[value="favorite"]')?.remove();
+                    }
                     listActions.init(Conf.listActions ?? Conf.system?.listActions);
                     list_keyword.setAttribute("placeholder", glot.get("searchKeyword"));
                     listTitle.innerHTML = glot.get("listTitle");
@@ -1594,10 +1598,12 @@ class CMapMaker extends IndoorControl {
         const visited = document.getElementById("visited");
         const favorite = document.getElementById("favorite");
         const memo = document.getElementById("visited-memo");
-        if (!favorite) return;
-        const record = poiStatusCont.getRecord(favorite.name);
+        const osmid = favorite?.name || visited?.name || memo?.name;
+        if (!osmid) return;
+        const record = poiStatusCont.getRecord(osmid);
         const visitedValue = visited ? visited.getAttribute("aria-pressed") === "true" : record.visited;
-        poiStatusCont.setValueByOSMID(favorite.name, visitedValue, favorite.getAttribute("aria-pressed") === "true", memo?.value ?? record.memo);
+        const favoriteValue = favorite ? favorite.getAttribute("aria-pressed") === "true" : record.favorite;
+        poiStatusCont.setValueByOSMID(osmid, visitedValue, favoriteValue, memo?.value ?? record.memo);
         if (refreshMarkers) {
             this.viewPoi(listTable.getSelCategory());
             listTable.renderList();
@@ -1605,11 +1611,10 @@ class CMapMaker extends IndoorControl {
     }
 
     clearDatail() {
-        const favorite = document.getElementById("favorite")
         const mmap = document.getElementById("mini-map")
         const menu = document.getElementById("btnMenu")
         const detailMenu = document.getElementById("detailMenu")
-        if (Conf.etc.localSave && favorite) {
+        if (Conf.etc.localSave && detailMenu.querySelector("#visited, #favorite, #visited-memo")) {
             this.savePoiStatus()
             cMapMaker.eventMoveMap()                            // アイコン表示を更新
         }
