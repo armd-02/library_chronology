@@ -182,8 +182,10 @@ class OSMbasic {
             let poiStatus = poiStatusCont.getValueByOSMID(tags.id)
             const escapeAttr = value => String(value).replace(/[&"<>']/g, char =>
                 ({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;", "'": "&#39;" })[char]);
-            html += `<div class="flex-row mt-1 me-3"><button type="button" id="visited" class="poi-status-toggle btn btn-sm" name="${escapeAttr(tags.id)}" aria-pressed="${Boolean(poiStatus[PoiStatusIndex.VISITED])}" onclick="cMapMaker.togglePoiStatus('visited')"><i class="${poiStatus[PoiStatusIndex.VISITED] ? "fa-solid" : "fa-regular"} fa-circle-check fa-fw" aria-hidden="true"></i> ${glot.get("visited")}</button>`;
-            html += `</div><div class="flex-row mt-1 me-3"><button type="button" id="favorite" class="poi-status-toggle btn btn-sm" name="${escapeAttr(tags.id)}" aria-pressed="${Boolean(poiStatus[PoiStatusIndex.FAVORITE])}" onclick="cMapMaker.togglePoiStatus('favorite')"><i class="${poiStatus[PoiStatusIndex.FAVORITE] ? "fa-solid" : "fa-regular"} fa-heart fa-fw" aria-hidden="true"></i> ${glot.get("favorite")}</button>`;
+            if (Conf.etc.showVisited !== false) {
+                html += `<div class="flex-row mt-1 me-3"><button type="button" id="visited" class="poi-status-toggle btn btn-sm" name="${escapeAttr(tags.id)}" aria-pressed="${Boolean(poiStatus[PoiStatusIndex.VISITED])}" onclick="cMapMaker.togglePoiStatus('visited')"><i class="${poiStatus[PoiStatusIndex.VISITED] ? "fa-solid" : "fa-regular"} fa-circle-check fa-fw" aria-hidden="true"></i> ${glot.get("visited")}</button></div>`;
+            }
+            html += `<div class="flex-row mt-1 me-3"><button type="button" id="favorite" class="poi-status-toggle btn btn-sm" name="${escapeAttr(tags.id)}" aria-pressed="${Boolean(poiStatus[PoiStatusIndex.FAVORITE])}" onclick="cMapMaker.togglePoiStatus('favorite')"><i class="${poiStatus[PoiStatusIndex.FAVORITE] ? "fa-solid" : "fa-regular"} fa-heart fa-fw" aria-hidden="true"></i> ${glot.get("favorite")}</button>`;
             html += `</div>${directionsHtml}`;
             if (Conf.etc.showPersonalMemo !== false) {
                 const memo = poiStatus[PoiStatusIndex.MEMO] ?? "";

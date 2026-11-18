@@ -217,6 +217,7 @@
     "etc": {
         "relativePath": "",
         "showPersonalMemo": false,
+        "showVisited": false,
         "editModeSwitch": false,
         "localSave": "library-chronology",
         "reverseIcon": false,

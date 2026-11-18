@@ -585,6 +585,7 @@ class CMapMaker extends IndoorControl {
                             if (key) element.setAttribute(attribute, glot.get(key));
                         }
                     });
+                    document.getElementById("poiFilterVisitOptions")?.classList.toggle("d-none", Conf.etc.showVisited === false);
                     areaSearchController.init();
                     const listModes = document.querySelector(".place-list-mode");
                     if (listModes) listModes.hidden = !Conf.etc.localSave;
@@ -1593,9 +1594,10 @@ class CMapMaker extends IndoorControl {
         const visited = document.getElementById("visited");
         const favorite = document.getElementById("favorite");
         const memo = document.getElementById("visited-memo");
-        if (!visited || !favorite) return;
-        const memoValue = memo?.value ?? poiStatusCont.getRecord(visited.name).memo;
-        poiStatusCont.setValueByOSMID(visited.name, visited.getAttribute("aria-pressed") === "true", favorite.getAttribute("aria-pressed") === "true", memoValue);
+        if (!favorite) return;
+        const record = poiStatusCont.getRecord(favorite.name);
+        const visitedValue = visited ? visited.getAttribute("aria-pressed") === "true" : record.visited;
+        poiStatusCont.setValueByOSMID(favorite.name, visitedValue, favorite.getAttribute("aria-pressed") === "true", memo?.value ?? record.memo);
         if (refreshMarkers) {
             this.viewPoi(listTable.getSelCategory());
             listTable.renderList();
@@ -1603,13 +1605,11 @@ class CMapMaker extends IndoorControl {
     }
 
     clearDatail() {
-        const visited = document.getElementById("visited")
         const favorite = document.getElementById("favorite")
-        const memo = document.getElementById("visited-memo")
         const mmap = document.getElementById("mini-map")
         const menu = document.getElementById("btnMenu")
         const detailMenu = document.getElementById("detailMenu")
-        if (Conf.etc.localSave !== "" && visited !== null) {    // 訪問機能が有効＆訪問済みチェックの場合
+        if (Conf.etc.localSave && favorite) {
             this.savePoiStatus()
             cMapMaker.eventMoveMap()                            // アイコン表示を更新
         }
