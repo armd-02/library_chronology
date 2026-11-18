@@ -1,0 +1,114 @@
+{
+    "wikipedia": {
+        "marker": "wikipedia.svg",
+        "api_": "wikipedia.org/w/api.php?format=json&action=query&prop=extracts%7Cimages&exintro=&explaintext=&titles=",
+        "api": "wikipedia.org/api/rest_v1/page/summary/",
+        "domain": "wikipedia.org",
+        "tag": "wikipedia",
+        "image": true
+    },
+    "system": {
+        "OverPassServer": [
+            "https://armd-01.sakura.ne.jp/api/interpreter",
+            "https://overpass-api.de/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter"
+        ],
+        "NoChacheServer": "https://overpass-api.de/api/interpreter"
+    },
+    "tile": {
+        "OSMFJ_NOPOI_DARK": {
+            "style": "./tiles/osmfj_nopoi_dark.json",
+            "name": "OpenStreetMap ダーク（OSMFJ提供）",
+            "skip": false
+        },
+        "OSMFJ_NOPOI": {
+            "style": "./tiles/osmfj_nopoi.json",
+            "name": "OpenStreetMap(3D/OSMFJ提供)",
+            "skip": false
+        },
+        "OSM_Standard": {
+            "style": {
+                "version": 8,
+                "sources": {
+                    "rtile": {
+                        "type": "raster",
+                        "tiles": [
+                            "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        ],
+                        "tileSize": 256,
+                        "maxzoom": 19,
+                        "attribution": "<a href=\"https://openstreetmap.org\">&copy OpenStreetMap contributors</a>"
+                    }
+                },
+                "glyphs": "https://tile.openstreetmap.jp/fonts/{fontstack}/{range}.pbf",
+                "layers": [
+                    {
+                        "id": "raster-tiles",
+                        "type": "raster",
+                        "source": "rtile"
+                    }
+                ]
+            },
+            "name": "OpenStreetMap標準地図(2D)",
+            "skip": false
+        },
+        "GSI_seamlessphoto": {
+            "style": {
+                "version": 8,
+                "sources": {
+                    "rtile": {
+                        "type": "raster",
+                        "tiles": [
+                            "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg"
+                        ],
+                        "tileSize": 256,
+                        "maxzoom": 18,
+                        "attribution": "<a href='https://www.gsi.go.jp/kikakuchousei/kikakuchousei40182.html'>全国最新写真（シームレス） | &copy OpenStreetMap contributors</a>"
+                    }
+                },
+                "layers": [
+                    {
+                        "id": "raster-tiles",
+                        "type": "raster",
+                        "source": "rtile"
+                    }
+                ],
+                "glyphs": "https://tile.openstreetmap.jp/fonts/{fontstack}/{range}.pbf"
+            },
+            "name": "地理院 全国最新写真（シームレス）",
+            "skip": false
+        },
+        "miniMap": {
+            "style": "./tiles/osmfj_nopoi.json?ver=20261009-06",
+            "name": "Planet globe",
+            "skip": true
+        }
+    },
+    "menu_list": {
+        "template": "<a class='dropdown-item'><span></span></a><span class='dropdown-item'></span>",
+        "divider": "<div class='dropdown-divider'></div>"
+    },
+    "style": {
+        "circle": {
+            "radius": 0,
+            "color": "#000080",
+            "fillColor": "#0000A0",
+            "Opacity": 0.1,
+            "fillOpacity": 0.1,
+            "timer": 1000
+        },
+        "text": {
+            "view": true,
+            "size": 14,
+            "color": "black"
+        }
+    },
+    "skyStyle": {
+        "sky-color": "#60A0E0",
+        "sky-horizon-blend": 0.5,
+        "horizon-color": "#C0D0F0",
+        "horizon-fog-blend": 0.5,
+        "fog-color": "#0000ff",
+        "fog-ground-blend": 0.5
+    }
+}

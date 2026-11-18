@@ -1,0 +1,28 @@
+{
+    "activities": {
+        "libc": {
+            "form": {
+                "date": {
+                    "glot": "libc_ymd",
+                    "type": "text",
+                    "gsheet": "chronologyDate"
+                },
+                "agency": {
+                    "glot": "libc_agency",
+                    "type": "textarea",
+                    "gsheet": "agency"
+                },
+                "authority": {
+                    "glot": "libc_authority",
+                    "type": "textarea",
+                    "gsheet": "authority"
+                },
+                "area": {
+                    "glot": "libc_area",
+                    "type": "textarea",
+                    "gsheet": "area"
+                }
+            }
+        }
+    }
+}

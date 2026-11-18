@@ -1,0 +1,21 @@
+{
+    "osm": {
+        "library": {
+            "overpass": [
+                "relation[\"amenity\"=\"library\"]",
+                "way[\"amenity\"=\"library\"]",
+                "node[\"amenity\"=\"library\"]"
+            ],
+            "tags": [
+                "amenity=library"
+            ],
+            "expression": {
+                "poiView": true,
+                "viewArea": false,
+                "stroke": "#606060",
+                "stroke-width": 0,
+                "fill-opacity": 0.25
+            }
+        }
+    }
+}

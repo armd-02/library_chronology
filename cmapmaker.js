@@ -2,319 +2,1883 @@
 "use strict";
 
 // Global Variable
-var Conf = {};					// Config Praams
-const LANG = (window.navigator.userLanguage || window.navigator.language || window.navigator.browserLanguage).substr(0, 2) == "ja" ? "ja" : "en";
-const FILES = [
-	"./baselist.html", "./data/config.json", './data/system.json', './data/overpass.json', `./data/marker.json`,
-	`./data/category-${LANG}.json`, `data/list-${LANG}.json`, `./data/glot_custom.json`, `data/glot_system.json`];
-const glot = new Glottologist();
-
-// initialize
-console.log("Welcome to MapMaker.");
-window.addEventListener("DOMContentLoaded", function () {
-	let jqXHRs = [];
-	for (let key in FILES) { jqXHRs.push($.get(FILES[key])) };
-	$.when.apply($, jqXHRs).always(function () {
-		let arg = {}, basehtml = arguments[0][0];								// Get Menu HTML
-		for (let i = 1; i <= 6; i++) arg = Object.assign(arg, arguments[i][0]);	// Make Config Object
-		Object.keys(arg).forEach(key1 => {
-			Conf[key1] = {};
-			Object.keys(arg[key1]).forEach((key2) => Conf[key1][key2] = arg[key1][key2]);
-		});
-		glot.data = Object.assign(glot.data, arguments[7][0]);					// import glot data
-		glot.data = Object.assign(glot.data, arguments[8][0]);					// import glot data
-
-		window.onresize = winCont.window_resize;      	// 画面サイズに合わせたコンテンツ表示切り替え
-		// document.title = glot.get("title");		// Title(no change / Google検索で日本語表示させたいので)
-		cMapmaker.init(basehtml);					// Mapmaker Initialize
-		if (Conf.google.Analytics !== "") {			// Google Analytics
-			let AnalyticsURL = '<script async src="https://www.googletagmanager.com/gtag/js?id=' + Conf.default.GoogleAnalytics + '"></script>';
-			document.getElementsByTagName('head').insertAdjacentHTML("beforeend", AnalyticsURL);
-			window.dataLayer = window.dataLayer || [];
-			function gtag() { dataLayer.push(arguments); };
-			gtag('js', new Date());
-			gtag('config', Conf.google.Analytics);
-		};
-	});
-});
-
-class CMapMaker {
-
-	constructor() {
-		this.status = "initialize";
-		this.detail = false;				// detail_view表示中はtrue
-		this.open_osmid = "";
-		this.last_modetime = 0;
-	};
-
-	init(basehtml) {	// Initialize
-		winCont.window_resize();			// Set Window Size(mapidのサイズ指定が目的)
-		winCont.splash(true);
-		leaflet.init();						// Leaflet Initialize
-
-		Promise.all([
-			gSpreadSheet.get(Conf.google.AppScript),
-			cMapmaker.static_check(),
-			cMapmaker.poi_get()				// get_zoomなどleafletの情報が必要なためleaflet.init後に実行
-		]).then(results => {
-			// leaflet add control
-			leaflet.controlAdd("bottomleft", "zoomlevel", "");
-			leaflet.controlAdd("topleft", "baselist", basehtml, "leaflet-control m-1");	// Make: base list
-			leaflet.controlAdd("bottomright", "global_spinner", "", "spinner-border text-primary d-none");
-			leaflet.locateAdd();
-
-			// mouse hover event(baselist mouse scroll)
-			baselist.addEventListener("mouseover", () => { map.scrollWheelZoom.disable(); map.dragging.disable() }, false);
-			baselist.addEventListener("mouseleave", () => { map.scrollWheelZoom.enable(); map.dragging.enable() }, false);
-
-			poiCont.set_actjson(results[0]);
-			cmap_events.init();
-			cMapmaker.poi_view();
-			winCont.window_resize();
-			listTable.init();
-			listTable.make(Object.values(Conf.listTable.targets));					// view all list
-			cMapmaker.mode_change("map");										// initialize last_modetime
-			winCont.menu_make(Conf.menu, "main_menu");
-			glot.render();
-			if (location.search !== "") {    	// 引数がある場合
-				let search = location.search.replace(/[?&]fbclid.*/, '').replace(/%2F/g, '/');   // facebook対策
-				let param = search.replace('-', '/').replace('=', '/').slice(1).split('.');
-				history.replaceState('', '', location.pathname + search + location.hash);
-				if (param[0] !== "") {
-					cMapmaker.detail_view(param[0], param[1]);
-				};
-			};
-			winCont.splash(false);
-			console.log("cmapmaker: initial end.");
-		});
-	}
-
-	static_check() {	// check static osm mode
-		return new Promise((resolve, reject) => {
-			if (!Conf.static.mode) {		// static mode以外は即終了
-				resolve("no static mode");
-			} else {
-				$.ajax({ "type": 'GET', "dataType": 'json', "url": Conf.static.osmjson, "cache": false }).done(function (data) {
-					let ovanswer = OvPassCnt.set_osmjson(data);
-					poiCont.add_geojson(ovanswer);
-					resolve(ovanswer);
-				}).fail(function (jqXHR, statusText, errorThrown) {
-					console.log(statusText);
-					reject(jqXHR, statusText, errorThrown);
-				});;
-			}
-		})
-	}
-
-	licence() {			// About license
-		let msg = { msg: glot.get("licence_message") + glot.get("more_message"), ttl: glot.get("licence_title") };
-		winCont.modal_open({ "title": msg.ttl, "message": msg.msg, "mode": "close", callback_close: winCont.modal_close, "menu": false });
-	}
-
-	mode_change(mode) {	// mode change(list or map)
-		if (this.status !== "mode_change" && (this.last_modetime + 300) < Date.now()) {
-			this.status = "mode_change";
-			let params = { 'map': ['down', 'remove', 'start'], 'list': ['up', 'add', 'stop'] };
-			mode = !mode ? (list_collapse.classList.contains('show') ? 'map' : 'list') : mode;
-			console.log('mode_change: ' + mode + ' : ' + this.last_modetime + " : " + Date.now());
-			list_collapse_icon.className = 'fas fa-chevron-' + params[mode][0];
-			list_collapse.classList[params[mode][1]]('show');
-			this.last_modetime = Date.now();
-			this.status = "normal";
-		};
-	}
-
-	poi_view() {			// Poiを表示させる
-		console.log("cMapmaker: PoiView");
-		if (map.getZoom() >= Conf.default.iconViewZoom) {
-			Object.values(Conf.targets).forEach(key => poiMarker.set(key, false));
-		} else if (map.getZoom() >= Conf.default.act_iconViewZoom) {
-			Object.values(Conf.targets).forEach(key => poiMarker.set(key, true));
-		} else {
-			poiMarker.all_clear();
-		};
-	}
-
-	poi_get(targets) {		// OSMとGoogle SpreadSheetからPoiを取得してリスト化
-		return new Promise((resolve) => {
-			console.log("cMapmaker: PoiGet start");
-			winCont.spinner(true);
-			var keys = (targets !== undefined && targets !== "") ? targets : Object.values(Conf.targets);
-			if ((map.getZoom() < Conf.default.iconViewZoom) && !Conf.static.mode) {
-				winCont.spinner(false);
-				console.log("cMapmaker: poi_get end(more zoom).");
-				resolve({ "update": false });
-			} else {
-				OvPassCnt.get(keys).then(ovanswer => {
-					winCont.spinner(false);
-					poiCont.add_geojson(ovanswer);
-					console.log("cMapmaker: poi_get end(success).");
-					resolve({ "update": true });
-				}).catch((jqXHR) => {
-					winCont.spinner(false);
-					console.log("cMapmaker: poi_get end(overror). " + jqXHR.stack);
-					resolve({ "update": false });
-				});
-			};
-		});
-	}
-
-	qr_add(target, osmid) {			// QRコードを表示
-		let marker = poiMarker.get(target, osmid);
-		if (marker !== undefined) {
-			let wiki = marker.mapmaker_lang.split(':');
-			let url = encodeURI(`https://${wiki[0]}.${Conf.osm.wikipedia.domain}/wiki/${wiki[1]}`);
-			let pix = map.latLngToLayerPoint(marker.getLatLng());
-			let ll2 = map.layerPointToLatLng(pix);
-			basic.getWikipedia(wiki[0], wiki[1]).then(text => poiMarker.qr_add(target, osmid, url, ll2, text));
-		};
-	}
-
-	detail_view(osmid, openid) {	// PopUpを表示(marker,openid=actlst.id)
-		const detail_close = () => {
-			winCont.modal_close();
-			history.replaceState('', '', location.pathname + location.hash);
-			cMapmaker.open_osmid = "";
-			cMapmaker.detail = false;
-		};
-		if (cMapmaker.detail) detail_close();
-		let osmobj = poiCont.get_osmid(osmid);
-		let tags = osmobj == undefined ? { "targets": [] } : osmobj.geojson.properties;
-		let categorys = Object.keys(Conf.category);
-		let keyn = categorys.find(key => tags[key] !== undefined);
-		let icon_name = Conf.marker_tag[keyn][tags[keyn]];
-		let target = osmobj.targets[0];
-		let category = poiCont.get_catname(tags);
-		let title = "", message = "";
-		for (let i = 0; i < Conf.osm[target].views.length; i++) {
-			if (tags[Conf.osm[target].views[i]] !== void 0) {
-				title = `<img src="./${Conf.icon.path}/${icon_name}">${tags[Conf.osm[target].views[i]]}`;
-				break;
-			}
-		}
-		if (title == "") title = category;
-		if (title == "") title = glot.get("undefined");
-		winCont.menu_make(Conf.detail_menu, "modal_menu");
-		winCont.modal_progress(0);
-		cMapmaker.open_osmid = osmid;
-
-		// append OSM Tags(仮…テイクアウトなど判別した上で最終的には分ける)
-		message += modal_osmbasic.make(tags);
-
-		// append wikipedia
-		if (tags.wikipedia !== undefined) {
-			message += modal_wikipedia.element();
-			winCont.modal_progress(100);
-			modal_wikipedia.make(tags).then(html => {
-				modal_wikipedia.set_dom(html);
-				winCont.modal_progress(0);
-			});
-		};
-
-		// append activity
-		let actlists = poiCont.get_actlist(osmid);
-		if (actlists.length > 0) message += modal_activities.make(actlists, openid);
-		history.replaceState('', '', location.pathname + "?" + osmid + (!openid ? "" : "." + openid) + location.hash);
-		winCont.modal_open({ "title": title, "message": message, "mode": "close", "callback_close": detail_close, "menu": true });
-		if (openid !== undefined) document.getElementById("modal_" + openid).scrollIntoView();
-
-		$('[data-toggle="popover"]').popover();			// set PopUp
-		cMapmaker.detail = true;
-	}
-
-	url_share(openid) {			// URL共有機能
-		function execCopy(string) {
-			let pre = document.createElement('pre');			// ClipBord Copy
-			pre.style.webkitUserSelect = 'auto';
-			pre.style.userSelect = 'auto';
-			let text = document.createElement("div");
-			text.appendChild(pre).textContent = string;
-			text.style.position = 'fixed';
-			text.style.right = '200%';
-			document.body.appendChild(text);
-			document.getSelection().selectAllChildren(text);
-			let copy = document.execCommand("copy");
-			document.body.removeChild(text);
-			return copy;
-		};
-		let osmid = location.search.replace(/[?&]fbclid.*/, '');    // facebook対策
-		let param = osmid.replace('-', '%2F').replace('=', '%2F').slice(1).split('.');
-		execCopy(location.protocol + "//" + location.hostname + location.pathname + "?" + param[0] + (!openid ? "" : "." + openid) + location.hash);
-	}
-
-	playback(flist) {					// 指定したリストを連続再生()
-		const view_control = (list, idx) => {
-			if (list.length >= (idx + 1)) {
-				listTable.select(list[idx][0]);
-				poiMarker.select(list[idx][0], false);
-				if (this.status == "playback") {
-					setTimeout(view_control, speed_calc(), list, idx + 1);
-				};
-			} else {
-				listTable.disabled(false);
-				listTable.heightSet(listTable.height + "px");	// mode end
-				this.status = "normal";							// mode stop
-				icon_change("play");
-			};
-		};
-		const icon_change = (mode) => { list_playback.className = 'fas fa-' + mode };
-		const speed_calc = () => { return ((parseInt(list_speed.value) / 100) * Conf.playback.timer) + 100 };
-		if (this.status !== "playback") {
-			listTable.disabled(true);
-			listTable.heightSet(listTable.height / 4 + "px");
-			leaflet.zoomSet(Conf.playback.zoomLevel);
-			cMapmaker.mode_change("list");
-			this.status = "playback";
-			icon_change("stop");
-			setTimeout(view_control, speed_calc(), flist, 0);
-		} else {
-			listTable.disabled(false);
-			listTable.heightSet(listTable.height + "px");		// mode end
-			this.status = "normal";								// mode stop
-			icon_change("play");
-		}
-	}
-
-};
-var cMapmaker = new CMapMaker();
-
-class cMapEvents {
-
-	constructor() {
-		this.busy = false;
-		this.id = 0;
-	}
-
-	init() {
-		map.on('moveend', () => cmap_events.map_move());   	// マップ移動時の処理
-		map.on('zoomend', () => cmap_events.map_zoom());	// ズーム終了時に表示更新
-	}
-
-	map_move(e) {                					// map.moveend発生時のイベント
-		console.log("cmapmaker: move event start.");
-		if (this.busy > 1) return;					// 処理中の時は戻る
-		if (this.busy == 1) clearTimeout(this.id);	// no break and cancel old timer.
-		this.busy = 1;
-		this.id = setTimeout(() => {
-			console.log("cmapmaker: move event end.");
-			this.busy = 2;
-			cMapmaker.poi_get().then((status) => {
-				cMapmaker.poi_view();
-				if (status.update && Conf.listTable.update_mode !== "static") {
-					listTable.make(Object.values(Conf.listTable.targets));	// view all list
-				};
-				this.busy = 0;
-			}).catch(() => {
-				this.busy = 0;
-			});
-		}, 700);
-	}
-
-	map_zoom() {				// View Zoom Level & Status Comment
-		let nowzoom = map.getZoom();
-		let message = `${glot.get("zoomlevel")}${map.getZoom()} `;
-		if (nowzoom < Conf.default.act_iconViewZoom) message += `<br>${glot.get("morezoom")}`;
-		$("#zoomlevel").html("<h2 class='zoom'>" + message + "</h2>");
-	}
+var Conf = {}; // Config Praams
+const LANG = window.APP_LANGUAGE || ((window.navigator.languages?.[0] || window.navigator.language || window.navigator.userLanguage || window.navigator.browserLanguage || "en").toLowerCase().startsWith("ja") ? "ja" : "en");
+const MAP_TITLE_DISPLAY_DELAY_MS = 500;
+const MAP_MOVE_SETTLE_DELAY_MS = 300;
+async function retryInitialDataLoad(load, label, isCurrent = () => true) {
+    const delays = [500, 1500];
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await load();
+        } catch (error) {
+            if (attempt >= delays.length || !isCurrent()) throw error;
+            console.warn(`${label}: retrying after load failure`, error);
+            await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+            if (!isCurrent()) throw error;
+        }
+    }
 }
-var cmap_events = new cMapEvents();
+const glot = new Glottologist();
+glot.lang = LANG;
+let modalActs = null;
+let osmBasic = null;
+const basic = new Basic();
+const poiStatusCont = new PoiStatusCont();
+const overPassCont = new OverPassControl();
+const mapLibre = new Maplibre();
+const geoCont = new GeoCont();
+const listTable = new ListTable();
+const poiCont = new PoiCont();
+const feature3d = new MapFeature3D({
+    modelFactories: PlaygroundModelFactories,
+    getFeatureLabel: id => {
+        const poi = poiCont.get_osmid(id);
+        if (!poi) return id;
+        const props = poi.geojson.properties ?? {};
+        const tags = props.tags && typeof props.tags === "object" ? props.tags : props;
+        const category = poiCont.getCatnames(tags).find(Boolean) || "";
+        const name = poiCont.getOSMname(tags, glot.lang);
+        return name || category || id;
+    },
+    getFeatureIcon: id => {
+        const poi = poiCont.get_osmid(id);
+        return poi ? `./${Conf.icon.fgPath}/${poiCont.getIcon(poi.geojson.properties)}` : "";
+    },
+    onSelect: async id => {
+        const poi = poiCont.get_osmid(id);
+        await cMapMaker.viewDetail(id);
+        if (poi) {
+            geoCont.flashPolygon(poi.geojson);
+            geoCont.writePoiCircle(poi.geojson);
+        }
+    }
+});
+const gSheet = new GoogleSpreadSheet();
+const newsTicker = new HistoricalNewsController();
+const changeTicker = new NewsTicker();
+const changesController = new ChangeController();
+window.previewRandomChanges = count => {
+    const results = changesController.previewRandom(count);
+    cMapMaker.showChangeTicker();
+    return results;
+};
+const areaFeatureLinker = new AreaFeatureLinker();
+window.areaFeatureLinker = areaFeatureLinker;
+const areaSearchController = new AreaSearchController(areaFeatureLinker);
+window.areaSearchController = areaSearchController;
+// Generic POI filter entry point; area search remains the data/search engine.
+window.poiFilterController = areaSearchController;
+const placeDiscovery = typeof PlaceDiscoveryController === "function" ? new PlaceDiscoveryController() : null;
+window.placeDiscovery = placeDiscovery;
+const listActions = new ListActionButtons();
+window.listActions = listActions;
+let wikimedia = null;
+let wikimediaPromise = null;
+const getWikimedia = () => {
+    if (wikimedia) return Promise.resolve(wikimedia);
+    if (!wikimediaPromise) {
+        wikimediaPromise = window.loadLazyScriptGroup("wikimedia")
+            .then(() => {
+                wikimedia = new WikimediaLib();
+                return wikimedia;
+            })
+            .catch((error) => {
+                wikimediaPromise = null;
+                throw error;
+            });
+    }
+    return wikimediaPromise;
+};
+var PoiStatusIndex = { VISITED: 0, FAVORITE: 1, MEMO: 2 };
+var PoiStatusCsvIndex = { KEY: 0, CATEGORY: 1, NAME: 2, VISITED: 3, FAVORITE: 4, MEMO: 5 };
+var PoiStatusCsvIndexOld = { KEY: 0, CATEGORY: 1, NAME: 2, VISITED: 3, MEMO: 4 };
+
+class CMapMaker extends IndoorControl {
+
+    constructor() {
+        super();
+        this.status = "initialize";         // 状態フラグ / initialize changeMode normal playback
+        this.mode = "map";
+        this.moveMapBusy = false;
+        this.moveMapPending = false;
+        this.moveMapTimer = null;
+        this.lastMapMoveEnd = 0;
+        this.activeViewUpdate = null;
+        this.pendingExplicitView = null;
+        this.changeKeywordWaitTime;
+        this.scrollHints = 0;
+        this.thumbnailRowsKey = "";
+        this.thumbnailRows = [];
+        this.detailLibrariesPromise = null;
+        this.favoriteFilter = null;
+        this.visitedFilterStatus = null;
+        this.openOSMid = null;
+        this.updateViewRequestId = 0;
+        this.mapTitleRequestId = 0;
+        this.activityRequestId = 0;
+        this.lastActivityBbox = null;
+    }
+
+    loadDetailLibraries() {
+        if (modalActs && osmBasic && wikimedia) return Promise.resolve();
+        if (!this.detailLibrariesPromise) {
+            this.detailLibrariesPromise = Promise.all([
+                window.loadLazyScriptGroup("detail"),
+                getWikimedia()
+            ]).then(() => {
+                modalActs ??= new Activities();
+                osmBasic ??= new OSMbasic();
+            }).catch((error) => {
+                this.detailLibrariesPromise = null;
+                throw error;
+            });
+        }
+        return this.detailLibrariesPromise;
+    }
+
+    async loadChangeReviewRows(osmId) {
+        this.changeReviewRequests ??= new Map();
+        if (this.changeReviewRequests.has(osmId)) return this.changeReviewRequests.get(osmId);
+        const request = (async () => {
+            const url = new URL(Conf.activity.url, location.href);
+            ["summary", "limit", "updated_since", "bbox", "osmids", "id"].forEach(key => url.searchParams.delete(key));
+            url.searchParams.set("osmid", osmId);
+            const rows = await gSheet.get(url.href, { throwOnError: true });
+            poiCont.setActdata([...poiCont.adata.filter(row => row.osmid !== osmId), ...rows]);
+            return rows;
+        })();
+        this.changeReviewRequests.set(osmId, request);
+        try { return await request; }
+        finally { this.changeReviewRequests.delete(osmId); }
+    }
+
+    showChangeTicker() {
+        const setting = Conf.changes?.ticker;
+        if (setting?.use !== true || !mapLibre.map) return;
+        const items = changesController.tickerItems(setting.maxItems);
+        changeTicker.init(mapLibre.map.getContainer(), {
+            id: "changesTicker",
+            collapsible: true,
+            modal: true,
+            buttonHosts: { desktop: "changesButtonDesktop", mobile: "changesButtonMobile" },
+            seenStorageKey: `${Conf.etc?.localSave || "cmapmaker"}.changes-seen-items`,
+            groupByPlace: true,
+            // Fetch initial history only on an explicit opening; revisits reuse fetched results.
+            itemsProvider: async () => {
+                await changesController.loadInitialHistory?.();
+                return changesController.tickerItems(setting.maxItems);
+            },
+            detailsProvider: async events => {
+                const ids = [...new Set(events.filter(event => event.activityId
+                    && /^(node|way|relation)\/\d+$/.test(event.osmId || "")).map(event => event.osmId))];
+                await Promise.all(ids.map(id => this.loadChangeReviewRows(id)));
+                const reviews = new Map(changesController.tickerItems(setting.maxItems)
+                    .filter(event => event.activityId).map(event => [event.activityId, event]));
+                return events.map(event => {
+                    const updated = event.activityId ? reviews.get(event.activityId) || event : event;
+                    return updated.review ? { ...updated, review: { ...updated.review,
+                        goodPoints: (updated.review.goodPoints || []).map(key => glot.get?.(key) || key),
+                        visitDateLabel: glot.get?.("actdate") || "訪問日"
+                    } } : updated;
+                });
+            },
+            onSelect: async (event) => {
+                if (!/^(node|way|relation)\/\d+$/.test(event.osmId || "")) return false;
+                if (event.activityId && !poiCont.adata.some(row => row.id === event.activityId)) {
+                    await this.loadChangeReviewRows(event.osmId);
+                }
+                const selection = poiCont.select(event.osmId, true, 0, event.coordinates, { fromChanges: true });
+                // 座標で移動を始めたら、詳細取得を待たず地図を見せる。
+                if (event.coordinates) changeTicker.modalInstance?.hide();
+                await selection;
+                if (event.activityId) await this.viewDetail(event.osmId, event.activityId);
+                return true;
+            },
+            displayDuration: setting.displayDuration,
+            mobileLabel: (setting.mobileLabelKey ? glot.get(setting.mobileLabelKey) : setting.mobileLabel) || glot.get("changeFeed_updatesTitle"),
+            sourceHref: setting.sourceHref || "https://www.openstreetmap.org/",
+            sourceLabel: setting.sourceLabel || "OpenStreetMap"
+        });
+        changeTicker.setItems(items, { ariaLabel: (setting.mobileLabelKey ? glot.get(setting.mobileLabelKey) : setting.mobileLabel) || glot.get("changeFeed_updatesTitle") });
+    }
+
+    async autoShowChangeModal(regionCode) {
+        const setting = Conf.changes?.ticker;
+        if (Conf.changes?.use !== true || setting?.use !== true || setting.autoOpen === false
+            || changesController.initialVisit || !regionCode || this.changeAutoOpening || changeTicker.isOpen || changeTicker.opening) return false;
+        this.changeAutoOpening = true;
+        try {
+            const map = mapLibre.map;
+            if (map?.isMoving?.()) await new Promise(resolve => map.once("moveend", resolve));
+            const region = await changesController.region();
+            if (region.code !== regionCode || changeTicker.isOpen || changeTicker.opening
+                || !changeTicker.unreadEvents().length) return false;
+            const today = changesController.localDate();
+            const storageKey = changesController.key(`auto-shown.${regionCode}`);
+            this.changeAutoShownDates ??= new Map();
+            if (this.changeAutoShownDates.get(storageKey) === today
+                || changesController.read(storageKey) === today) return false;
+            // Reserve this attempt so overlapping startup/move events cannot open twice.
+            await changeTicker.toggle();
+            if (!changeTicker.isOpen) return false;
+            this.changeAutoShownDates.set(storageKey, today);
+            changesController.write(storageKey, today);
+            return true;
+        } finally {
+            this.changeAutoOpening = false;
+        }
+    }
+
+    async refreshChangeRegion() {
+        if (Conf.changes?.use !== true) return;
+        this.changeRegionPending = true;
+        if (this.changeRegionRefresh) return this.changeRegionRefresh;
+        this.changeRegionRefresh = (async () => {
+            while (this.changeRegionPending) {
+                this.changeRegionPending = false;
+                const region = await changesController.region();
+                if (this.displayedChangeRegion === region.code) continue;
+                changesController.results = [];
+                changeTicker.hide();
+                await changesController.checkOnStartup();
+                this.displayedChangeRegion = region.code;
+                this.showChangeTicker();
+                await this.autoShowChangeModal(region.code);
+            }
+        })().catch(error => console.warn("Change region refresh failed", error))
+            .finally(() => { this.changeRegionRefresh = null; });
+        return this.changeRegionRefresh;
+    }
+
+    async initStartupNotices() {
+        if (Conf.siteUpdates?.use === true) {
+            this.siteUpdates ??= new SiteUpdatesController(Conf.siteUpdates, LANG);
+            this.siteUpdates.initButton();
+            if (await this.siteUpdates.autoShow()) {
+                this.siteUpdates.modal.element.addEventListener("hidden.bs.modal", () => {
+                    this.initDailyIntro();
+                }, { once: true });
+                return;
+            }
+        }
+        await this.initDailyIntro();
+    }
+
+    async initDailyIntro() {
+        const intro = document.getElementById("cMapIntro");
+        const closeButton = document.getElementById("cMapIntroClose");
+        if (!intro || !closeButton) return;
+
+        const introConfig = Conf?.intro ?? {};
+        const now = new Date();
+        const today = [
+            now.getFullYear(),
+            String(now.getMonth() + 1).padStart(2, "0"),
+            String(now.getDate()).padStart(2, "0")
+        ].join("-");
+        const storageKey = introConfig.storageKey
+            || Conf?.etc?.storageKey
+            || "cmapmaker-intro-last-shown";
+        let shownToday = false;
+
+        try {
+            shownToday = window.localStorage.getItem(storageKey) === today;
+        } catch (error) {
+            console.info("cMapMaker: 案内の表示履歴を読み込めませんでした。", error);
+        }
+
+        changesController.config = Conf.changes ?? {};
+        const changeResult = await changesController.checkOnStartup();
+        this.displayedChangeRegion = changesController.read?.(changesController.key("last-region"));
+        if (Conf.changes?.ticker?.use === true) {
+            this.showChangeTicker();
+            if (changeResult.state !== "first" && !shownToday) await this.autoShowChangeModal(this.displayedChangeRegion);
+        }
+        if (changeResult.state !== "first" && Conf.changes?.ticker?.use === true && changesController.results.length) {
+            intro.hidden = true;
+            return;
+        }
+        if (shownToday) {
+            intro.hidden = true;
+            return;
+        }
+        if (["empty", "error", "already"].includes(changeResult.state)
+            || (introConfig.use === false && changeResult.state !== "changes")) {
+            intro.hidden = true;
+            return;
+        }
+        if (changeResult.state === "changes") {
+            intro.querySelector("h2").textContent = glot.get("intro_changes");
+            intro.querySelector("p").textContent = changesController.groups()
+                .map(group => glot.get("intro_groupCount").replace("{label}", group.label).replace("{count}", String(group.count))).join("　");
+            const viewButton = document.createElement("button");
+            viewButton.type = "button";
+            viewButton.className = "btn btn-sm btn-primary ms-2";
+            viewButton.textContent = glot.get("intro_viewList");
+            viewButton.addEventListener("click", () => {
+                changesController.showList();
+                intro.hidden = true;
+                stopPositionTracking();
+            });
+            intro.querySelector(".cMap-intro__body").appendChild(viewButton);
+        }
+
+        const positionBelowMenu = () => {
+            const menu = document.querySelector(".basemenu");
+            const map = document.getElementById("mapid");
+            if (!menu || !map) return;
+            const menuRect = menu.getBoundingClientRect();
+            const mapRect = map.getBoundingClientRect();
+            const top = Math.max(8, Math.ceil(menuRect.bottom - mapRect.top + 8));
+            intro.style.setProperty("--cmap-intro-top", `${top}px`);
+        };
+        const resizeObserver = typeof ResizeObserver === "function"
+            ? new ResizeObserver(positionBelowMenu)
+            : null;
+        const menu = document.querySelector(".basemenu");
+        if (menu) resizeObserver?.observe(menu);
+        window.addEventListener("resize", positionBelowMenu);
+        const stopPositionTracking = () => {
+            resizeObserver?.disconnect();
+            window.removeEventListener("resize", positionBelowMenu);
+        };
+
+        positionBelowMenu();
+        intro.hidden = false;
+        window.requestAnimationFrame(positionBelowMenu);
+        try {
+            window.localStorage.setItem(storageKey, today);
+        } catch (error) {
+            console.info("cMapMaker: 案内の表示履歴を保存できませんでした。", error);
+        }
+
+        closeButton.addEventListener("click", () => {
+            intro.hidden = true;
+            stopPositionTracking();
+        }, { once: true });
+    }
+
+    // Normalize legacy settings without migrating or overwriting the site's files.
+    prepareConfig() {
+        Conf.activity = {
+            url: Conf.google?.AppScript || "",
+            authMode: "legacy",
+            targetName: Conf.google?.targetName || "activity",
+            ...Conf.activity
+        };
+        // Dedicated applications opt in to new services and area/model definitions.
+        for (const name of ["news", "changes", "intro", "siteUpdates", "areaFeatureLinker", "areaSearch",
+            "discovery", "listActions", "feature3d", "stampMarkers", "directions", "documentPreview", "mapImageLinks"]) {
+            Conf[name] = { use: false, ...Conf[name] };
+        }
+    }
+
+    init() {        // initialize
+        console.log("Welcome to Community Map Maker.");
+        console.log("initialize: Start.");
+        window.setStartupStatus?.(window.startupText("config"));
+        const FILES = [
+            "./baselist.html", "./data/config-user.jsonc", "./data/config-system.jsonc",
+            "./data/config-activities.jsonc", `./data/marker.jsonc`,
+            `./data/category-${LANG}.jsonc`, `./data/listtable.jsonc`,
+            "./data/overpass-system.jsonc", `./data/overpass-custom.jsonc`,
+            `./data/glot-custom.jsonc`, `./data/glot-system.jsonc`,
+        ];
+        const fetchText = async (url, maxAttempts = 3) => {
+            let lastError;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                    }
+                    return await response.text();
+                } catch (error) {
+                    lastError = error;
+                    if (attempt < maxAttempts) {
+                        await new Promise(resolve => setTimeout(resolve, attempt * 250));
+                    }
+                }
+            }
+            throw new Error(`Failed to load ${url}: ${lastError?.message ?? "Unknown fetch error"}`);
+        };
+        const fetchUrls = FILES.map(url => fetchText(window.withAppAssetVersion(url)));
+        const setUrlParams = function () {  // URLから引数を取得して返す関数
+            let keyValue = {};
+            let search = location.search.replace(/[?&]fbclid.*/, "").replace(/%2F/gi, "/").slice(1); // facebook対策
+            search = search.slice(-1) == "/" ? search.slice(0, -1) : search; // facebook対策(/が挿入される)
+            let params = search.split("&"); // -= -> / and split param
+            history.replaceState("", "", location.pathname + "?" + search + location.hash); // fixURL
+            for (const param of params) {
+                const separator = param.indexOf(param.includes("=") ? "=" : "/");
+                if (separator < 0) continue;
+                keyValue[param.slice(0, separator)] = param.slice(separator + 1);
+            }
+            return keyValue;
+        }
+        const loadStatic = async function () {
+            if (!Conf.static.use) return;
+
+            console.log("cMapMaker: Static mode");
+            // Process one file at a time instead of retaining every response body.
+            for (const url of Conf.static.osmjsons) {
+                const data = await retryInitialDataLoad(async () => {
+                    const response = await fetch(window.withAppAssetVersion(url));
+                    if (!response.ok) throw new Error(`Static data load failed: ${url} (${response.status})`);
+                    return response.text();
+                }, "Static data");
+                let json;
+                try {
+                    json = await overPassCont.parseOverpassJsonAsync(data);
+                } catch {
+                    // Existing static sources may contain JSON5 comments or trailing commas.
+                    json = JSON5.parse(data);
+                }
+                const ovanswer = await overPassCont.setOsmJson(json);
+                poiCont.addGeojson(ovanswer, { source: "static" });
+                if (Conf.activity?.chronology) poiCont.addStaticOsmAliases(json.chronology_osm_aliases);
+            }
+            poiCont.setActlnglat();
+            console.log("cMapMaker: Static load done.");
+        }
+        const setBGImage = function (imgUrl) {  // basemenuの背景画像設定
+            const test = new Image();
+            const versionedImgUrl = window.withAppAssetVersion(imgUrl);
+            test.onload = () => document.body.style.setProperty("--bg-url", `url(${versionedImgUrl})`);
+            test.onerror = () => document.body.style.setProperty("--bg-url", "none");
+            test.src = versionedImgUrl;
+        }
+
+        const localActivityUrl = function (rawUrl) {
+            const url = new URL(rawUrl, location.href);
+            if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(location.hostname)) {
+                url.hostname = location.hostname;
+            }
+            return url;
+        }
+
+        const configureLocalActivityBackend = function () {
+            const settings = Conf.activity?.local;
+            if (!settings?.use || !(settings.hosts || []).includes(location.hostname)) return null;
+            if (settings.url) {
+                Conf.activity.url = localActivityUrl(settings.url).href;
+                console.info(`Activity API endpoint configured (no request yet): ${Conf.activity.url}`);
+            }
+            return settings;
+        }
+
+        const loadLocalActivitySchema = async function (settings) {
+            if (!settings?.schemaUrl) return;
+            const url = localActivityUrl(settings.schemaUrl);
+            if (settings.app) url.searchParams.set("app", settings.app);
+            const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+            if (!response.ok) throw new Error(`Activity Schema load failed: HTTP ${response.status}`);
+            const schema = await response.json();
+            const adapted = ActivitySchemaAdapter.apply(Conf.activities, schema, settings);
+            Conf.activities = adapted.activities;
+            glot.data = Object.assign(glot.data, adapted.labels);
+            console.info(`Activity Schema: local API (${url.href})`);
+        }
+
+        Promise.all(fetchUrls)
+            .then(async (texts) => {
+                let basehtml = texts[0]; // Get Menu HTML
+                for (let i = 1; i <= 7; i++) {
+                    Conf = Object.assign(Conf, JSON5.parse(texts[i]));
+                }
+                this.prepareConfig();
+                Conf.osm = Object.assign(Conf.osm, JSON5.parse(texts[8]).osm);
+                Conf.category_keys = Object.keys(Conf.category); // Make Conf.category_keys
+                Conf.category_subkeys = Object.keys(Conf.category_sub); // Make Conf.category_subkeys
+                glot.data = Object.assign(glot.data, JSON5.parse(texts[10])); // shared labels
+                glot.data = Object.assign(glot.data, JSON5.parse(texts[9])); // app labels override shared labels
+                const localActivitySettings = configureLocalActivityBackend();
+                try {
+                    await loadLocalActivitySchema(localActivitySettings);
+                } catch (error) {
+                    console.warn("Activity Schema: local API unavailable; using bundled configuration.", error);
+                }
+                let UrlParams = setUrlParams();
+                if (Conf.selectItem.action === "ChangeMap"
+                    && UrlParams.category
+                    && Conf.tile[UrlParams.category]) {
+                    Conf.map.tileName = UrlParams.category;
+                }
+                this.editModeSwitchEnabled = Conf.etc.editModeSwitch ?? !Conf.etc.editMode;
+                if (this.editModeSwitchEnabled && UrlParams.edit !== undefined && basic.parseBoolean(UrlParams.edit) === true) Conf.etc.editMode = true;
+                if (UrlParams.static !== undefined) {
+                    const staticMode = basic.parseBoolean(UrlParams.static);
+                    if (staticMode !== null) Conf.static.use = staticMode;
+                }
+
+                listTable.init();
+                poiCont.init(Conf.minimap.use);
+
+                // 初期HTMLのスプラッシュを、地図UIの準備が完了するまで表示し続ける。
+                // MapLibreを非表示・0サイズの要素内で初期化すると、Firefoxでは初回の
+                // スタイル／タイル読み込みが遅延することがある。進捗画面の背後で先に
+                // 実寸レイアウトを確定してから地図を作る。
+                article.classList.remove("d-none");
+                article.style.removeProperty("display");
+                winCont.resizeWindow();
+                mapLibre.init(Conf).then(() => { // GASの応答を待たず、地図を先に初期化する
+                    // MapLibre add control
+                    console.log("initialize: MapLibre OK.");
+                    feature3d.init(mapLibre.map, Conf.feature3d || {}).then(ready => {
+                        if (ready) cMapMaker.viewPoi(listTable.getSelCategory());
+                    }).catch(error => console.warn("MapFeature3D: marker refresh failed", error));
+                    mapLibre.addControl("top-left", "baselist", basehtml, "mapLibre-control m-0 p-0"); // Make: base list
+                    mapLibre.addControl("top-left", "eventDates",
+                        '<div id="eventDateFilter" class="event-date-filter" role="group" aria-label="イベント日付" hidden></div>',
+                        "event-date-control");
+                    winCont.enableHorizontalDrag(document.getElementById("eventDateFilter"));
+                    document.querySelector(".basemenu")?.classList.toggle("category-secondary", Conf.searchUi?.categoryPresentation === "secondary");
+                    setBGImage(Conf.listTable.backgroundImage)
+                    mapLibre.addControl("bottom-right", "dummy", " ", "");
+
+                    if (Conf.map.changeMap) mapLibre.addControl("bottom-right", "maplist", "<button onclick='cMapMaker.changeMap()'><i class='fas fa-layer-group fa-lg'></i></button>", "maplibregl-ctrl-group");
+                    mapLibre.addControl("bottom-left", "images", "", "showcase"); // add images
+                    this.mapIllustrations = new MapIllustrations();
+                    this.mapIllustrations.init(mapLibre.map, Conf.mapIllustrations);
+                    this.mapImageLinks = new MapImageLinks();
+                    this.mapImageLinks.init(mapLibre.map, Conf.mapImageLinks);
+                    mapLibre.addNavigation("bottom-right");
+                    mapLibre.addControl("bottom-left", "globalStatus", "", "m-0");
+                    globalStatus.innerHTML = '<div class="global-status-message" role="status" aria-live="polite"><div id="globalSpinner" class="spinner-border spinner-border-sm text-primary flex-shrink-0 m-0 d-none" aria-hidden="true"></div><span id="globalMessage" class="globalMessage"></span></div>';
+                    globalStatus.appendChild(document.getElementById("mapDisplayStatus"));
+                    mapLibre.setGlobalStatusControlPosition(globalStatus);
+                    newsTicker.init(Conf.news, mapLibre, Conf.tile);
+                    cMapMaker.initIndoorControl(UrlParams.level);
+                    winCont.playback(Conf.listTable.playback.view); // playback control view:true/false
+                    winCont.download(Conf.listTable.download); // download view:true/false
+                    cMapMaker.changeMode("list");
+                    cMapMaker.showMapTitleWhenReady(mapLibre.selectStyle);
+                    const mergedMenu = [...Conf.menu.main, ...Conf.menu.mainSystem];
+                    winCont.menu_make(mergedMenu, "main_menu");
+                    if (Conf.areaSearch.use === true || Conf.etc.localSave) {
+                        document.getElementById("main_menu").insertAdjacentHTML("afterbegin", `
+                            <button class="dropdown-item d-flex align-items-center gap-2" type="button"
+                                id="poiFilterButton" onclick="poiFilterController.open('search')"
+                                aria-haspopup="dialog" aria-controls="poiFilterModal">
+                                <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                <span glot-model="placeFilter_title"></span>
+                            </button>
+                            <div class="dropdown-divider"></div>`);
+                    }
+                    if (this.editModeSwitchEnabled && Object.keys(Conf.poiView.editZoom ?? {}).length
+                        && !document.getElementById("editModeButton")) {
+                        document.getElementById("main_menu").insertAdjacentHTML("afterbegin", `
+                            <button class="dropdown-item d-flex align-items-center gap-2" type="button"
+                                id="editModeButton" onclick="cMapMaker.setEditMode(!Conf.etc.editMode)"
+                                role="menuitemcheckbox" aria-checked="${Boolean(Conf.etc.editMode)}">
+                                <i id="editModeIndicator" class="fa-solid ${Conf.etc.editMode ? 'fa-check' : 'fa-pen-to-square'}" aria-hidden="true"></i>
+                                <span glot-model="editMode_label"></span>
+                            </button>`);
+                    }
+                    winCont.mouseDragScroll(images, cMapMaker.eventViewThumb); // set Drag Scroll on images
+                    winCont.initSidebarResize();
+                    glot.render();
+                    document.querySelectorAll("[data-glot-title], [data-glot-aria-label]").forEach(element => {
+                        for (const attribute of ["title", "aria-label"]) {
+                            const key = element.getAttribute(`data-glot-${attribute}`);
+                            if (key) element.setAttribute(attribute, glot.get(key));
+                        }
+                    });
+                    areaSearchController.init();
+                    const listModes = document.querySelector(".place-list-mode");
+                    if (listModes) listModes.hidden = !Conf.etc.localSave;
+                    listActions.init(Conf.listActions ?? Conf.system?.listActions);
+                    list_keyword.setAttribute("placeholder", glot.get("searchKeyword"));
+                    listTitle.innerHTML = glot.get("listTitle");
+                    let resizeWaitTime;
+                    const isFormInputFocused = () => {
+                        const active = document.activeElement;
+                        return ["INPUT", "TEXTAREA", "SELECT"].includes(active?.tagName)
+                            || active?.isContentEditable === true;
+                    };
+                    window.onresize = () => { // 画面サイズに合わせたコンテンツ表示切り替え
+                        clearTimeout(resizeWaitTime);
+                        // ソフトキーボードによる高さ変更では、入力欄を含むパネルを再配置しない。
+                        if (isFormInputFocused()) return;
+                        winCont.resizeWindow();
+                        resizeWaitTime = setTimeout(() => {
+                            if (isFormInputFocused()) return;
+                            winCont.setSidebar("redraw").then(() => {
+                                cMapMaker.makeImages(Conf.thumbnail.use);
+                            });
+                        }, 100);
+                    };
+                    if (LANG === "en") document.title = glot.get("site_title");
+                    cMapMaker.clearDatail() // 詳細モーダルの内容をクリア
+
+                    const initialCategory = decodeURI(
+                        (UrlParams.category !== "" && UrlParams.category !== undefined) ? UrlParams.category : Conf.selectItem.default
+                    );
+                    let resolveInitialView;
+                    const initialViewReady = new Promise((resolve) => { resolveInitialView = resolve; });
+                    const applicationReady = winCont.setSidebar(Conf.sideBar.initView).then(() => {
+                        // 地図操作イベントは先に登録する。ただし初回データ取得が終わるまでは
+                        // status=initialize のため、パン／ズームによる重複取得は発生しない。
+                        cMapMaker.status = "initialize";
+                        cMapMaker.addEvents();
+                        window.hideStartupStatus?.();
+                        cMapMaker.initStartupNotices().catch(error => console.warn("Startup notices failed", error));
+                    });
+                    // 外部のActivityデータも地図が操作可能になってから取得する。
+                    const activityDataPromise = cMapMaker.usesActivityBbox()
+                        ? null : applicationReady.then(() => gSheet.get(Conf.activity.url, {
+                            responseWrapper: Conf.activity.responseWrapper,
+                            throwOnError: Boolean(Conf.activity.responseWrapper)
+                        }));
+                    let initialLoadStarted = false;
+                    const init_close = function () {
+                        if (initialLoadStarted) return;
+                        initialLoadStarted = true;
+                        applicationReady.then(() => {
+                            // スプラッシュが閉じて地図が描画された次のフレームから、
+                            // 操作を妨げない状態で周辺データの取得を始める。
+                            requestAnimationFrame(() => requestAnimationFrame(() => {
+                                cMapMaker.updateView(initialCategory).then(() => {     // 初期データロード
+                                    mapLibre.addCountryFlagsImage(poiCont.getAllOSMCountryCode())
+                                    winCont.resizeWindow()
+                                    if (UrlParams.node || UrlParams.way || UrlParams.relation) {
+                                        let keyv = Object.entries(UrlParams).find(([key]) => ["node", "way", "relation"].includes(key))
+                                        let param = keyv[0] + "/" + keyv[1]
+                                        let subparam = param.split(".") // split child elements(.)
+                                        let osmdata = poiCont.get_osmid(subparam[0])
+                                        let geojson = osmdata !== undefined ? osmdata.geojson : undefined
+                                        if (osmdata !== undefined) {
+                                            return cMapMaker.viewDetail(subparam[0], subparam[1])
+                                                .then(() => {
+                                                    geoCont.flashPolygon(geojson)
+                                                    geoCont.writePoiCircle(geojson)
+                                                    const detailZoom = Math.max(mapLibre.getZoom(true), Conf.map.detailZoom)
+                                                    mapLibre.flyTo(osmdata.lnglat, detailZoom)
+                                                })
+                                                .catch((e) => {
+                                                    console.warn("cMapMaker.init: viewDetail failed", e);
+                                                });
+                                        } else {
+                                            console.warn("cMapMaker.init: No OSM data found for ID:", subparam[0]);
+                                        }
+                                    } else if (Conf.activity.chronology && UrlParams.activity && cMapMaker.usesActivityBbox()) {
+                                        return poiCont.select(UrlParams.activity, true);
+                                    }
+                                }).catch((error) => {
+                                    console.error("cMapMaker.init: Initial view load failed.", error);
+                                }).finally(() => {
+                                    cMapMaker.status = "normal";
+                                    resolveInitialView();
+                                    // Firefoxではサイドバー確定後の再描画が必要。
+                                    setTimeout(() => { cMapMaker.eventMoveMap() }, 300)
+                                });
+                            }));
+                        });
+                    }
+
+                    poiCont.setActdata([]);
+                    if (Conf.poiView.poiActLoad) {
+                        let osmids = poiCont.pois().acts.map((act) => { return act.osmid; });
+                        osmids = osmids.filter(Boolean);
+                        if (osmids.length > 0 && !Conf.static.use) {   // osmidsがある&非static時
+                            overPassCont.getOsmIds(osmids)
+                                .then((geojson) => {
+                                    if (geojson) poiCont.addGeojson(geojson)
+                                    poiCont.setActlnglat()
+                                })
+                                .catch((error) => {
+                                    console.error("cMapMaker.init: Initial Overpass load failed.", error);
+                                })
+                                .finally(() => {
+                                    init_close();
+                                });
+                        } else {    // static時
+                            loadStatic()
+                                .catch((error) => {
+                                    console.error("cMapMaker.init: Static data load failed.", error);
+                                })
+                                .finally(() => {
+                                    poiCont.setActlnglat()
+                                    init_close()
+                                })
+                        }
+                    } else if (Conf.static.use) {       // actLoadしない&Static時
+                        loadStatic()
+                            .catch((error) => {
+                                console.error("cMapMaker.init: Static data load failed.", error);
+                            })
+                            .finally(() => init_close())
+                    } else {
+                        init_close()
+                    }
+                    activityDataPromise?.then(async (activities) => {
+                        await initialViewReady;
+                        if (!Conf.activity.url || activities.length === 0) return;
+                        poiCont.setActdata(activities);
+
+                        if (Conf.poiView.poiActLoad && (!Conf.static.use || Conf.etc.editMode)) {
+                            const osmids = activities.map((act) => act.osmid).filter(Boolean);
+                            if (osmids.length > 0) {
+                                try {
+                                    const geojson = await overPassCont.getOsmIds(osmids);
+                                    if (geojson) poiCont.addGeojson(geojson);
+                                } catch (error) {
+                                    console.error("cMapMaker.init: Deferred Overpass load failed.", error);
+                                }
+                            }
+                        }
+
+                        poiCont.setActlnglat();
+                        await cMapMaker.updateView(initialCategory);
+                        if (Conf.activity.chronology && UrlParams.activity && !cMapMaker.detail) {
+                            await poiCont.select(UrlParams.activity, true);
+                        } else if (cMapMaker.openOSMid) {
+                            const selected = /\.(libc\/\d+)(?:&|$)/.exec(location.search);
+                            await cMapMaker.viewDetail(cMapMaker.openOSMid, selected?.[1]);
+                        }
+                        if (!Conf.static.use) mapLibre.addCountryFlagsImage(poiCont.getAllOSMCountryCode());
+                        console.log("initialize: Deferred activity data loaded.");
+                    }).catch((error) => {
+                        console.error("cMapMaker.init: Deferred activity data load failed.", error);
+                        if (Conf.activity.chronology) winCont.showMessage(glot.get("chronologyLoadFailed"));
+                    });
+                }).catch((e) => {
+                    console.error("cMapMaker.init: MapLibre init failed", e);
+                    window.setStartupStatus?.(window.startupText("mapFailed"), true);
+                });
+            }).catch((e) => {
+                console.error("cMapMaker.init: initial file load failed", e);
+                window.setStartupStatus?.(window.startupText("configFailed"), true);
+            });
+    }
+
+    addEvents() {
+        mapLibre.on('movestart', this.eventStartMoveMap.bind(cMapMaker));
+        mapLibre.on('moveend', this.eventMoveMap.bind(cMapMaker))   		// マップ移動時の処理
+        mapLibre.on('moveend', () => newsTicker.update())
+        mapLibre.on('zoomend', this.eventZoomMap.bind(cMapMaker))			// ズーム終了時に表示更新
+        list_category.addEventListener('change', this.eventChangeCategory.bind(cMapMaker))	// category change
+        const suggestions = document.getElementById('list_keyword_suggestions');
+        let suggestionIndex = -1;
+        const closeSuggestions = () => {
+            if (!suggestions) return;
+            suggestions.hidden = true;
+            list_keyword.setAttribute('aria-expanded', 'false');
+            list_keyword.removeAttribute('aria-activedescendant');
+            suggestionIndex = -1;
+        };
+        const chooseSuggestion = value => {
+            list_keyword.value = value;
+            closeSuggestions();
+            cMapMaker.searchKeyword(value, { selectFirst: true });
+        };
+        const updateSuggestions = () => {
+            if (!suggestions) return;
+            suggestions.replaceChildren(...listTable.keywordSuggestions(list_keyword.value).map(value => {
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.setAttribute('role', 'option');
+                option.textContent = value;
+                option.addEventListener('mousedown', event => event.preventDefault());
+                option.addEventListener('click', () => chooseSuggestion(value));
+                return option;
+            }));
+            suggestionIndex = -1;
+            suggestions.hidden = suggestions.children.length === 0;
+            list_keyword.setAttribute('aria-expanded', String(!suggestions.hidden));
+            list_keyword.removeAttribute('aria-activedescendant');
+        };
+        list_keyword.addEventListener('input', event => {
+            if (!event.isComposing) updateSuggestions();
+        });
+        list_keyword.addEventListener('compositionend', updateSuggestions);
+        list_keyword.addEventListener('focus', updateSuggestions);
+        list_keyword.addEventListener('blur', () => setTimeout(closeSuggestions, 150));
+        list_keyword.addEventListener('keydown', (event) => {
+            if (event.isComposing) return;
+            const options = suggestions && !suggestions.hidden ? [...suggestions.children] : [];
+            if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && options.length) {
+                event.preventDefault();
+                suggestionIndex = (suggestionIndex + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+                options.forEach((option, index) => {
+                    option.id = `keyword_suggestion_${index}`;
+                    option.setAttribute('aria-selected', String(index === suggestionIndex));
+                });
+                list_keyword.setAttribute('aria-activedescendant', options[suggestionIndex].id);
+                options[suggestionIndex].scrollIntoView({ block: 'nearest' });
+            } else if (event.key === 'Escape') {
+                closeSuggestions();
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                if (suggestionIndex >= 0 && options[suggestionIndex]) chooseSuggestion(options[suggestionIndex].textContent);
+                else { closeSuggestions(); cMapMaker.searchKeyword(list_keyword.value); }
+            }
+        });
+    }
+
+    selectEventDate(date) {
+        const config = Conf.eventDateFilter;
+        if (config?.use !== true) return;
+        if (!date) {
+            list_category.value = "";
+            list_keyword.value = "";
+            this.resetKeywordSearchState();
+        } else if (config.category !== "*" && !listTable.getSelCategory().includes(config.category)) {
+            list_category.value = config.category;
+            list_keyword.value = "";
+            this.resetKeywordSearchState();
+        }
+        listTable.eventDate = date;
+        this.refreshLocalFilters();
+        this.clearDatail();
+        geoCont.writePoiCircle();
+        areaSearchController.renderDisplayStatus();
+        this.changeMode("list");
+        winCont.setSidebar("list", date ? 0.65 : 0.35);
+    }
+
+    // about Map
+    about() {
+        let msg = glot.get("about_message");
+        msg = msg.replace(/\n/g, "<br>")  // 改行コードを<br>に変換
+        msg = "<span class=`fs-5`>" + msg + "</span>"
+        if (Conf.areaSearch?.use === true) msg += `<p class="mt-3 mb-0"><button type="button" class="participation-link fs-6" onclick="areaSearchController.open('research')" aria-haspopup="dialog" aria-controls="poiFilterModal">${glot.get("contribute_firstTime")}</button></p>`;
+        mapLibre.viewMiniMap(false)
+        winCont.makeDetail({ "title": glot.get("about"), "message": msg, "mode": "close", "menu": false })
+        cMapMaker.changeMode("map")
+        winCont.setSidebar("view")
+    }
+
+    // About license
+    licence() {
+        let msg = glot.get("licence_message") + glot.get("more_message");
+        msg = msg.replace(/\n/g, "<br>")  // 改行コードを<br>に変換
+        msg = "<span class=`fs-5`>" + msg + "</span>"
+        mapLibre.viewMiniMap(false)
+        winCont.makeDetail({ "title": glot.get("licence_title"), "message": msg, "mode": "close", "menu": false });
+        cMapMaker.changeMode("map")
+        winCont.setSidebar("view")
+    }
+
+    changeMode(newmode) {	// mode change(list or map or edit)
+        this.mode = newmode ? newmode : (this.mode == "map" ? "list" : "map");
+        basic.openAccordion(!["map", "edit"].includes(this.mode) ? "listAccordion" : "detailArea")	// アコーディオン切り替え
+        basic.closeAccordion(["map", "edit"].includes(this.mode) ? "listAccordion" : "detailArea")	// アコーディオン切り替え
+        if (this.mode == "list") {
+            geoCont.writePoiCircle()
+            cMapMaker.clearDatail()
+        }
+        //closeDetail.classList.toggle("d-none", this.mode == "list") // 詳細モーダルの閉じるボタンを非表示
+    }
+
+    showMapTitleWhenReady(styleName) {
+        const map = mapLibre.map;
+        const requestId = ++this.mapTitleRequestId;
+        const showTitle = () => {
+            if (requestId !== this.mapTitleRequestId || mapLibre.selectStyle !== styleName) return;
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    if (requestId !== this.mapTitleRequestId || mapLibre.selectStyle !== styleName) return;
+                    winCont.showMessage(Conf.tile[styleName].name);
+                }, MAP_TITLE_DISPLAY_DELAY_MS);
+            });
+        };
+
+        if (map?.loaded()) {
+            showTitle();
+        } else {
+            map?.once("idle", showTitle);
+        }
+    }
+
+    changeMap() {	// Change Map Style(rotation)
+        let styleName = mapLibre.changeMap()
+        newsTicker.update()
+        this.showMapTitleWhenReady(styleName)
+        setTimeout(() => {
+            this.eventMoveMap()
+            let snow = styleName.indexOf("SNOW") > -1;      // SNOWの文字列があれば雪を降らす
+            winCont.fallsSnow(snow)
+        }, 1000)
+    }
+
+    // OverPassキャッシュモード設定
+    setCacheMode(mode) {
+        let UseCache = overPassCont.useCache(mode)
+        globalMessage.innerHTML = glot.get(UseCache ? "UseOVCacheYes" : "UseOVCacheNo");
+        setTimeout(() => { globalMessage.innerHTML = "" }, 4000)
+    }
+
+    async setEditMode(enabled) {
+        if (!this.editModeSwitchEnabled || this.editModeChanging || enabled === Boolean(Conf.etc.editMode)) return false;
+        this.editModeChanging = true;
+        const button = document.getElementById("editModeButton");
+        if (button) button.disabled = true;
+        try {
+            if (this.mode === "edit") {
+                const confirmed = await new Promise(resolve => winCont.confirm({
+                    title: glot.get("confirmCloseTitle"), message: glot.get("confirmCloseDetail"), callback: resolve
+                }));
+                if (!confirmed) return false;
+            }
+            // Invalidate an in-flight update before changing which data is visible.
+            ++this.updateViewRequestId;
+            Conf.etc.editMode = Boolean(enabled);
+            ++poiCont.revision;
+            poiCont.cat_cache = {};
+            const indicator = document.getElementById("editModeIndicator");
+            if (indicator) indicator.className = `fa-solid ${enabled ? "fa-check" : "fa-pen-to-square"}`;
+            if (button) button.setAttribute("aria-checked", String(Conf.etc.editMode));
+            this.clearDatail();
+            this.changeMode("list");
+            list_category.value = "";
+            list_keyword.value = "";
+            this.resetKeywordSearchState();
+            const url = new URL(location.href);
+            url.searchParams.delete("category");
+            if (enabled) url.searchParams.set("edit", "true");
+            else url.searchParams.delete("edit");
+            history.replaceState("", "", url.pathname + url.search + url.hash);
+            this.refreshLocalFilters();
+            await this.updateView();
+            return true;
+        } catch (error) {
+            console.warn("cMapMaker: edit mode update failed", error);
+            return false;
+        } finally {
+            this.editModeChanging = false;
+            if (button) button.disabled = false;
+        }
+    }
+
+    getPoiZoom(target) {
+        const defaultZoom = Conf.poiView?.poiZoom?.[target];
+        const isMobile = basic.isSmartPhone()
+            || (window.matchMedia && window.matchMedia("(max-width: 640px)").matches);
+        const mobileZoom = Conf.poiView?.mobilePoiZoom?.[target];
+        return isMobile && mobileZoom !== undefined ? mobileZoom : defaultZoom;
+    }
+
+    setVisitedFilter(visitedFilterStatus) {
+        console.log(`cMapMaker: setVisitedFilter: ${visitedFilterStatus}`);
+        this.visitedFilterStatus = visitedFilterStatus;
+        this.refreshLocalFilters();
+    }
+
+    toggleFavoriteFilter(checked) {
+        console.log(`cMapMaker: toggleFavoriteFilter: ${checked}`);
+        this.favoriteFilter = checked;
+        this.refreshLocalFilters();
+    }
+
+    refreshLocalFilters() {
+        // Category/personal filters can immediately reuse the loaded data.
+        listTable.makeList(false);
+        listTable.filterByPoiStatus(this.visitedFilterStatus, this.favoriteFilter, false);
+        listTable.renderList();
+        areaSearchController.renderSummary();
+        this.makeImages(Conf.thumbnail.use);
+        this.viewArea();
+        this.viewPoi(listTable.getSelCategory());
+        feature3d.sync();
+    }
+
+    viewArea() {			// Area(敷地など)を表示させる refタグがあれば()表記
+        const started = performance.now();
+        const stages = [];
+        const activeTargets = new Set(poiCont.getTargets());
+        let targets = [...new Set([...activeTargets, ...Object.keys(Conf.poiView.editZoom ?? {})])];
+        console.log("viewArea: " + targets.join())
+        targets.forEach((target) => {
+            const osmConf = Conf.osm[target]
+            if (!osmConf) return
+            if (osmConf.expression.viewArea) {   // viewArea: trueが対象
+                if (osmConf.expression.renderer !== "indoor"
+                    && mapLibre.isPolygonSourceCurrent(target, poiCont.revision)) return;
+                const targetStarted = performance.now();
+                let pois = activeTargets.has(target) ? poiCont.getPois(target, false)
+                    : { geojson: [], targets: [], lnglat: [] };
+                if (osmConf.expression.renderer === "indoor") {
+                    const controlPois = poiCont.getPois("-", false);
+                    const contextStarted = performance.now();
+                    this.syncIndoorLevelControl(controlPois.geojson, controlPois.targets);
+                    const renderStarted = performance.now();
+                    mapLibre.addIndoor({
+                        "type": "FeatureCollection",
+                        "features": this.getIndoorRenderFeatures(pois)
+                    }, target, this.indoorLevel);
+                    stages.push({ target, prepareMs: Math.round(contextStarted - targetStarted),
+                        contextMs: Math.round(renderStarted - contextStarted),
+                        renderMs: Math.round(performance.now() - renderStarted) });
+                    return;
+                }
+                let titleTag = "";
+                if (!osmConf.expression.poiView) {  // poiViewがfalseの時(true時はpoiView側で表示するため)
+                    const localizedName = mapLibre.nameExpression(glot.lang, [""]);
+                    titleTag = ["format", ["case", ["all", ["has", "ref"], ["!=", ["get", "ref"], ""]],
+                        ["case", ["has", "local_ref"],
+                            ["concat", "(", ["get", "ref"], "/", ["get", "local_ref"], ") ", localizedName],
+                            ["concat", "(", ["get", "ref"], ") ", localizedName]
+                        ], localizedName
+                    ], {}];
+                }
+                mapLibre.addPolygon(
+                    { "type": "FeatureCollection", "features": pois.geojson },
+                    target,
+                    titleTag,
+                    poiCont.revision
+                )
+                stages.push({ target, totalMs: Math.round(performance.now() - targetStarted) });
+            }
+        })
+        const durationMs = Math.round(performance.now() - started);
+        if (durationMs >= 100) console.warn("viewArea: slow update", {
+            durationMs, featureCount: poiCont.pdata.geojson.length, stages
+        });
+    }
+
+    viewPoi(targets) {		// Poiを表示させる
+        if (Conf.poiView.poiFilter === "all") {
+            // Keep viewport/zoom/floor visibility while ignoring list filters.
+            poiCont.setPoi(undefined, false);
+            return;
+        }
+        let nowselect = listTable.getSelCategory()          // tags,key=valueの複数値
+        nowselect = nowselect[0] == "" ? "-" : nowselect[nowselect.length - 1]
+        //console.log(`viewPoi: Start(now select ${nowselect}).`)
+        targets = targets[0] == "-" || targets[0] == "" ? poiCont.getTargets() : targets;		// '-' or ''はすべて表示
+        targets = targets.filter(target => {                                                    // poiView=trueのみ返す
+            return Conf.osm[target] !== undefined ? Conf.osm[target].expression.poiView : false;
+        })
+        targets = Object.keys(Conf.poiView.poiZoom).indexOf("activity") > -1 ? targets.concat("activity") : targets;
+        targets = Conf.etc.editMode ? targets.concat(Object.keys(Conf.poiView.editZoom)) : targets	// 編集時はeditZoom追加
+        targets = [...new Set(targets)];    // 重複削除
+        const markerList = listTable.getMarkerList();
+
+        let subcategory = poiCont.getTargets().indexOf(nowselect) > -1 || nowselect == "-" ? false : true;	// サブカテゴリ選択時はtrue
+        if (subcategory) {	// targets 内に選択肢が含まれていない場合（サブカテゴリ選択時）
+            poiCont.setPoi(markerList, false)
+        } else {			// targets 内に選択肢が含まれている場合
+            let nowzoom = mapLibre.getZoom(false)
+            //targets = targets.filter(target => target !== "activity");  // activiyがあれば削除 // 2025/08/20 一旦false
+            targets = targets.filter(s => s !== "");
+            if (nowselect === "-") {
+                poiCont.setPoi(markerList, false) //nowselect == Conf.activity.targetName) // 2025/08/20 一旦false
+            } else {
+                for (let target of targets) {
+                    console.log("viewPoi: " + target)
+                    let poiView = Conf.activity.targetName == target ? true : Conf.osm[target].expression.poiView	// activity以外はexp.poiViewを利用
+                    let flag = nowzoom >= this.getPoiZoom(target)
+                        || (Conf.etc.editMode && nowzoom >= Conf.poiView.editZoom[target])
+                    if ((target == nowselect) && flag && poiView) {	// 選択している種別の場合
+                        poiCont.setPoi(markerList, false) // target == Conf.activity.targetName) // 2025/08/20 一旦false
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    // 画面内のActivity画像・OSMのCommons画像を表示させる(view: true=表示)
+    makeImages(view) {
+        if (view) {
+            let acts = []
+            const filteredRows = listTable.getFilterList();
+            const rowsKey = filteredRows.map((row) => row[0]).join("\u0000");
+            if (rowsKey !== this.thumbnailRowsKey) {
+                this.thumbnailRowsKey = rowsKey;
+                this.thumbnailRows = basic.shuffleArray(filteredRows.slice());
+            }
+            const rows = this.thumbnailRows;
+            listTable.getThumbnailActivities(rows).forEach(act => {
+                if (act !== undefined) {
+                    let urls = []
+                    let actname = act.id.split("/")[0]
+                    if (Conf.activities[actname] !== undefined) {
+                        let forms = Conf.activities[actname].form
+                        for (const key of Object.keys(forms)) { // 複数あっても一つだけとする
+                            if (forms[key].type === "image_url" && String(act[forms[key].gsheet || key] ?? "").trim()) {
+                                urls.push(act[forms[key].gsheet || key]);
+                                break;
+                            }
+                        }
+                    } else {
+                        console.warn("cMapmaker.makeImage: No Activity Name");
+                    }
+                    if (urls.length) acts.push({ "src": urls, "osmid": act.osmid, "title": act.title, "activity": act })
+                }
+            })
+            const imageKeys = new Set(acts.flatMap(act =>
+                act.src.map(src => JSON.stringify([act.osmid, String(src).trim()]))));
+            for (const osmImage of listTable.getThumbnailOsmImages()) {
+                const key = JSON.stringify([osmImage.osmid, osmImage.src[0]]);
+                if (imageKeys.has(key)) continue;
+                imageKeys.add(key);
+                acts.push(osmImage);
+            }
+            if (acts.length > 0) {
+                images.classList.remove("d-none");
+                winCont.setImages(images, acts, Conf.etc.loadingUrl, Conf.thumbnail.limits, () => {
+                    if (this.scrollHints === 0 && winCont.scrollHint()) this.scrollHints++;
+                })
+                requestAnimationFrame(() => {
+                    const imageHeight = images.classList.contains("d-none") ? 0 : images.offsetHeight;
+                    dummy.style.height = imageHeight + "px";	// 画像表示領域の高さをダミーに設定
+                });
+            } else {
+                winCont.disconnectImageObserver();
+                images.classList.add("d-none");
+                dummy.style.height = "0px";
+            }
+        } else {
+            winCont.disconnectImageObserver();
+            images.classList.add("d-none");
+            dummy.style.height = "0px";
+        }
+    }
+
+    usesActivityBbox() {
+        return Conf.activity?.authMode === "basic" && Boolean(Conf.activity?.url)
+            && !gSheet._isGAS(Conf.activity.url);
+    }
+
+    async loadActivitiesForView(force = false) {
+        if (!this.usesActivityBbox()) return false;
+        // All-activity lists must not lose registrations when the map moves.
+        const allActivities = Conf.listTable?.allActs === true;
+        const viewportBbox = allActivities ? null : areaSearchController.searchBbox();
+        const bbox = allActivities ? "all" : viewportBbox ?? "-180,-90,180,90";
+        if (!force && bbox === this.lastActivityBbox) return false;
+        const requestId = ++this.activityRequestId;
+        const url = new URL(Conf.activity.url, location.href);
+        if (allActivities) url.searchParams.delete("bbox");
+        else url.searchParams.set("bbox", bbox);
+        console.info(allActivities ? "Activity request (all registrations):"
+            : viewportBbox === null ? "Activity BBOX request (full-world fallback):"
+                : "Activity BBOX request (viewport):", url.href);
+        try {
+            const load = () => gSheet.get(url.href, { throwOnError: true });
+            const activities = this.lastActivityBbox === null
+                ? await retryInitialDataLoad(load, "Activity data", () => requestId === this.activityRequestId)
+                : await load();
+            if (requestId !== this.activityRequestId) return false;
+            if (Conf.poiView.poiActLoad && (!Conf.static.use || Conf.etc.editMode)) {
+                // Imported rows may have no coordinates, and activity-only maps do not
+                // run a viewport OSM query. Resolve their OSM IDs here as well.
+                const osmids = [...new Set(activities.map(act => act.osmid).filter(Boolean))]
+                    .filter(osmid => !poiCont.get_osmid(osmid));
+                if (osmids.length) {
+                    try {
+                        const geojson = await overPassCont.getOsmIds(osmids);
+                        if (requestId !== this.activityRequestId) return false;
+                        if (geojson) poiCont.addGeojson(geojson);
+                    } catch (error) {
+                        console.warn("cMapMaker: Activity OSM load failed", error);
+                    }
+                }
+            }
+            if (requestId !== this.activityRequestId) return false;
+            poiCont.setActdata(activities);
+            this.lastActivityBbox = bbox;
+            poiCont.setActlnglat();
+            console.info(`Activity BBOX applied: ${activities.length} rows (${bbox})`);
+            return true;
+        } catch (error) {
+            console.warn("cMapMaker: Activity BBOX load failed", error);
+            if (Conf.activity?.chronology && this.lastActivityBbox === null) {
+                winCont.showMessage(glot.get("chronologyLoadFailed"));
+            }
+            return false;
+        }
+    }
+
+    async reloadActivitiesForView() {
+        return this.updateView(undefined, { reloadActivities: true });
+    }
+
+    // OSMとGoogle SpreadSheetからPoiを取得してリスト化
+    updateOsmPoi(targets) {
+        const progressUnitBytes = 1024 * 1024;
+        let displayedProgressTenths = 0;
+        return new Promise((resolve) => {
+            console.log("cMapMaker: updateOsmPoi: Start");
+            winCont.spinner(true);
+            var keys = (targets !== undefined && targets !== "") ? targets : poiCont.getTargets();
+            let PoiLoadZoom = 99;
+            for (let key of Object.keys(Conf.poiView.poiZoom)) {
+                const value = this.getPoiZoom(key);
+                if (key !== Conf.activity.targetName) PoiLoadZoom = value < PoiLoadZoom ? value : PoiLoadZoom;
+            };
+            if (Conf.etc.editMode) {
+                for (let [key, value] of Object.entries(Conf.poiView.editZoom)) {
+                    if (key !== Conf.activity.targetName) PoiLoadZoom = value < PoiLoadZoom ? value : PoiLoadZoom;
+                }
+            }
+            if ((mapLibre.getZoom(true) < PoiLoadZoom)) {
+                winCont.spinner(false);
+                console.log("[success]cMapMaker: updateOsmPoi End(more zoom).");
+                resolve({ "update": true });
+            } else {
+                overPassCont.getGeojson(keys, status_write).then(ovanswer => {
+                    winCont.spinner(false);
+                    console.log("[success]cMapMaker: updateOsmPoi End.");
+                    resolve({ "update": true, "geojson": ovanswer });
+                }).catch(() => {
+                    winCont.spinner(false);
+                    console.log("[error]cMapMaker: updateOsmPoi end.");
+                    resolve({ "update": false });
+                });
+            }
+        })
+
+        function status_write(progress) {
+            const progressTenths = Math.floor(progress * 10 / progressUnitBytes);
+            if (progressTenths < 1 || progressTenths === displayedProgressTenths) return;
+            displayedProgressTenths = progressTenths;
+            winCont.setLoadingStatus(`${glot.get("loading_message")} ${(progressTenths / 10).toFixed(1)} MB`);
+        }
+    }
+
+    // 通信完了が次のドラッグ開始と重なった場合は、操作を先に完了させる。
+    waitForMapInteractionEnd() {
+        return new Promise((resolve) => {
+            requestAnimationFrame(() => {
+                const map = mapLibre.map;
+                if (!map?.isMoving?.()) {
+                    resolve();
+                    return;
+                }
+                map.once("moveend", resolve);
+            });
+        });
+    }
+
+    // OSMデータを取得して画面表示
+    updateView(cat, { reloadActivities = false } = {}) {
+        clearTimeout(this.moveMapTimer);
+        this.moveMapTimer = null;
+        if (this.activeViewUpdate) {
+            this.moveMapPending = true;
+            this.pendingExplicitView ??= { waiters: [], reloadActivities: false };
+            this.pendingExplicitView.cat = cat;
+            this.pendingExplicitView.reloadActivities ||= reloadActivities;
+            return new Promise((resolve, reject) => {
+                this.pendingExplicitView.waiters.push({ resolve, reject });
+            });
+        }
+        this.moveMapPending = false;
+        this.moveMapBusy = true;
+        const update = Promise.resolve().then(async () => {
+            if (reloadActivities) {
+                if (this.usesActivityBbox()) {
+                    if (!await this.loadActivitiesForView(true)) throw new Error("Activity reload failed");
+                } else {
+                    const activities = await gSheet.get(Conf.activity.url);
+                    poiCont.setActdata(activities);
+                    poiCont.setActlnglat();
+                }
+            }
+            return this.performViewUpdate(cat);
+        }).finally(() => {
+            this.activeViewUpdate = null;
+            this.moveMapBusy = false;
+            const explicit = this.pendingExplicitView;
+            this.pendingExplicitView = null;
+            if (explicit) {
+                this.updateView(explicit.cat, { reloadActivities: explicit.reloadActivities }).then(
+                    value => explicit.waiters.forEach(waiter => waiter.resolve(value)),
+                    error => explicit.waiters.forEach(waiter => waiter.reject(error))
+                );
+            } else {
+                this.scheduleMoveMapUpdate();
+            }
+        });
+        this.activeViewUpdate = update;
+        return update;
+    }
+
+    performViewUpdate(cat) {
+        console.log("updateView Start.")
+        const requestId = ++this.updateViewRequestId;
+        const activityPromise = this.loadActivitiesForView();
+        return new Promise((resolve) => {
+            this.updateOsmPoi().then(async (status) => {
+                await activityPromise;
+                if (requestId !== this.updateViewRequestId) {
+                    console.log("updateView: Ignore stale response.");
+                    resolve({ "update": false, "stale": true });
+                    return;
+                }
+                switch (status.update) {
+                    case true:
+                        await this.waitForMapInteractionEnd();
+                        if (requestId !== this.updateViewRequestId) {
+                            resolve({ "update": false, "stale": true });
+                            return;
+                        }
+                        if (status.geojson) {
+                            poiCont.addGeojson(status.geojson);
+                            poiCont.setActlnglat();
+                        }
+                        // 新しい移動が予約済みなら、古い範囲のDOM更新は行わない。
+                        if (this.moveMapPending) {
+                            resolve({ "update": false, "deferred": true });
+                            return;
+                        }
+                        await areaSearchController.syncSearch();
+                        if (requestId !== this.updateViewRequestId) {
+                            resolve({ "update": false, "stale": true });
+                            return;
+                        }
+                        if (this.moveMapPending || mapLibre.map?.isMoving?.()) {
+                            resolve({ "update": false, "deferred": true });
+                            return;
+                        }
+                        let targets = listTable.getSelCategory();
+                        targets = (targets[0] == '' && cat !== undefined) ? [cat] : targets;
+                        listTable.makeList(false)
+                        listTable.makeSelectList(Conf.listTable.category)
+                        listTable.selectCategory(targets, false)
+                        listTable.filterByPoiStatus(this.visitedFilterStatus, this.favoriteFilter, false);
+                        listTable.renderList();
+                        if (Conf.changes?.ticker?.use === true) this.showChangeTicker();
+                        areaSearchController.renderSummary();
+                        if (window.getSelection) window.getSelection().removeAllRanges()
+                        this.makeImages(Conf.thumbnail.use)
+                        this.viewArea()	        // 入手したgeoJsonを追加
+                        this.viewPoi(targets)	// in targets
+                        feature3d.sync()
+                        resolve({ "update": true })
+                        break
+                    default:
+                        console.log("updateView Error.")
+                        resolve({ "update": false })
+                        break
+                }
+            }).catch((error) => {
+                console.warn("cMapMaker.updateView failed", error);
+                resolve({ "update": false, "error": true });
+            })
+        })
+    }
+
+    // キーワード検索
+    searchKeyword(keyword, { selectFirst = false } = {}) {
+        if (keyword !== null) {
+            if (String(keyword).trim() && !this.keywordSearchActive) {
+                const map = mapLibre.map;
+                this.keywordSearchCamera = map ? { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() } : null;
+            }
+            this.keywordSearchActive = Boolean(String(keyword).trim());
+            this.updateKeywordButton();
+            this.changeMode('list')
+            if (winCont.sidebarSize === 1) winCont.setSidebar("list");
+            clearTimeout(this.keywordSearchTimer);
+            this.keywordSearchTimer = setTimeout(() => {
+                listTable.filterKeyword(keyword);
+                const first = selectFirst && listTable.getFilterList()[0];
+                if (first) listTable.select(first[0]);
+            }, 300)
+            areaSearchController.renderDisplayStatus();
+        }
+    }
+
+    updateKeywordButton() {
+        const button = document.getElementById("list_keyword_button");
+        const icon = document.getElementById("list_keyword_search");
+        const label = glot.get(this.keywordSearchActive ? "clearKeyword" : "searchKeyword")
+            || (this.keywordSearchActive ? (LANG === "ja" ? "検索をクリア" : "Clear search") : (LANG === "ja" ? "キーワード検索" : "Search"));
+        button?.setAttribute("aria-label", label);
+        button?.setAttribute("title", label);
+        icon?.classList.toggle("fa-search", !this.keywordSearchActive);
+        icon?.classList.toggle("fa-xmark", Boolean(this.keywordSearchActive));
+    }
+
+    resetKeywordSearchState() {
+        clearTimeout(this.keywordSearchTimer);
+        this.keywordSearchActive = false;
+        this.keywordSearchCamera = null;
+        this.updateKeywordButton();
+    }
+
+    keywordButtonAction() {
+        if (!this.keywordSearchActive) {
+            this.searchKeyword(list_keyword.value);
+            return;
+        }
+        const camera = this.keywordSearchCamera;
+        this.resetKeywordSearchState();
+        list_keyword.value = "";
+        const suggestions = document.getElementById("list_keyword_suggestions");
+        if (suggestions) suggestions.hidden = true;
+        list_keyword.setAttribute("aria-expanded", "false");
+        list_keyword.removeAttribute("aria-activedescendant");
+        if (this.detail) this.clearDatail();
+        this.changeMode("list");
+        listTable.filterKeyword("");
+        geoCont.writePoiCircle();
+        areaSearchController.renderDisplayStatus();
+        if (camera) mapLibre.map.flyTo({ ...camera, essential: true });
+    }
+
+    async viewUnmappedActivity(id) {
+        const activity = poiCont.get_actid(id);
+        if (!activity) return false;
+        await this.loadDetailLibraries();
+        await winCont.setSidebar("view");
+        this.openOSMid = "";
+        mapLibre.viewMiniMap(false);
+        geoCont.writePoiCircle();
+        winCont.menu_make(Conf.menu.modal.slice(0, 1), "btnMenu");
+        history.replaceState("", "", location.pathname + "?activity=" + encodeURIComponent(id) + location.hash);
+        const notice = `<p class="text-muted">${glot.get("chronologyNoLocation")}</p>`;
+        winCont.makeDetail({ title: glot.get("libc"), message: notice + modalActs.make([activity]), menu: true });
+        this.changeMode("map");
+        this.detail = true;
+        return true;
+    }
+
+    // 詳細モーダル表示
+    viewDetail(osmid, openid) {	// PopUpを表示(marker,openid=actlst.id)]
+        console.log("viewDatail: Start");
+
+        return new Promise((resolve, reject) => {
+            const makeFlag = (country) => {     // 旗アイコンを追加
+                if (country == undefined) return ""
+                let title = "", countries = country.split(";")
+                const flagPath = (Conf.icon?.flagPath ?? "https://flagcdn.com/h20").replace(/\/$/, "");
+                countries.forEach(CCode => {
+                    const code = CCode.trim().toLowerCase();
+                    if (!/^[a-z0-9_-]+$/.test(code)) return;
+                    title += `<img src="${flagPath}/${code}.png" class="ms-1 me-1" height="16" alt="${code} Flag">`;
+                })
+                return title
+            }
+
+            const makeDatail = (osmid, openid) => {
+                if (osmid == "" || osmid == undefined) {    // OSMIDが空の時はクリアして終了
+                    cMapMaker.clearDatail()
+                    geoCont.writePoiCircle()
+                    resolve()
+                    return
+                }
+
+                winCont.setSidebar("view").then(() => {
+                    console.log("viewDatail: Get OSM Data.");
+                    let osmobj = poiCont.get_osmid(osmid);
+                    if (osmobj == undefined) { console.log("Error: No osmobj / ID: " + osmid); reject(); return }	// Error
+
+                    osmid = osmobj.geojson.id;
+                    let tags = osmobj.geojson.properties;
+                    let target = osmobj.targets[0];
+                    tags["*"] = "*";
+                    target = target == undefined ? "*" : target;			// targetが取得出来ない実在POI対応
+                    let category = poiCont.getCatnames(tags);
+                    let flagsHTML = makeFlag(tags.country);
+                    if (flagsHTML !== "") { // 国旗がある場合はminiMapを設定してHTML追加
+                        mapLibre.addMiniMap()
+                            .then(() => {
+                                flags.innerHTML = flagsHTML;
+                                mapLibre.showCountryByCode(tags.country);
+                            })
+                            .catch((e) => {
+                                console.warn("cMapMaker.viewDetail: addMiniMap failed", e);
+                            });
+                    }
+
+                    let title = `<img src="./${Conf.icon.fgPath}/${poiCont.getIcon(tags)}" class="ms-1 me-1" height="28">`
+                    let message = "";
+                    let name = poiCont.getOSMname(tags, glot.lang);
+                    name = name == "" ? poiCont.getCatnames(tags)[0] : name;   // 名前がある場合は「: 名前」とする
+                    title += name;
+                    const operator = String(tags.operator ?? "").trim();
+                    if (operator && operator !== name) {
+                        const operatorHtml = operator.replace(/[&<>"']/g, char =>
+                            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+                        title += ` / ${operatorHtml}`;
+                    }
+
+                    if (title == "") title = category[0] + category[1] !== "" ? "(" + category[1] + ")" : "";   // サブカテゴリ時は追加
+                    if (title == "") title = glot.get("undefined");
+                    winCont.menu_make(Conf.menu.modal, "btnMenu");
+                    winCont.setProgress(0);
+
+                    console.log("viewDatail: Make OSM Basic Info.");
+                    message += osmBasic.make(tags);
+                    message += osmBasic.makeAreaFacilities(osmid);
+                    message += areaSearchController.matchReasonHtml(osmid);
+                    // append activity
+                    const selectedCategory = listTable.getSelCategory().join(",");
+                    const catname = selectedCategory && selectedCategory !== "-"
+                        ? `&category=${encodeURIComponent(selectedCategory)}` : "";
+                    const facilityActivities = poiCont.getActlistByOsmid(osmid);
+                    const actlists = facilityActivities.filter(activity => listTable.matchesSelectedEventDate(activity));
+                    const modeQuery = Conf.etc.editMode && this.editModeSwitchEnabled ? "&edit=true" : "";
+                    const detailUrl = this.withIndoorLevel(location.pathname + "?" + osmid + (!openid ? "" : "." + openid) + catname + modeQuery);
+                    history.replaceState('', '', detailUrl + location.hash);
+                    if (actlists.length > 0) message += modalActs.make(actlists);
+                    if (tags.wikipedia !== undefined) {
+                        message += `<details class="facility-wikipedia"${facilityActivities.length === 0 ? " open" : ""}>
+                            <summary>${glot.get("placeAboutWikipedia")}</summary>
+                            ${wikimedia.makeWikipediaOverView(tags.wikipedia)}
+                        </details>`;
+                    }
+                    winCont.makeDetail({ "title": title, "message": message, "append": Conf.menu.activities, "menu": true, "openid": openid });
+                    mapLibre.viewMiniMap(tags.country)
+                    cMapMaker.changeMode("map")
+                    this.detail = true
+                    this.openOSMid = osmid
+                    listTable.recordView(osmid, name);
+                    const element = document.getElementById('btmHeader');
+                    element.scrollTo({ top: 0, behavior: 'smooth' });
+                    resolve()
+                })
+            }
+
+            if (this.mode == "edit") {    // 編集モード時は閉じるか確認する
+                winCont.confirm({
+                    title: glot.get("confirmCloseTitle"),
+                    message: glot.get("confirmCloseDetail"),
+                    callback: (answer) => {
+                        if (answer) {
+                            cMapMaker.clearDatail()
+                            this.loadDetailLibraries()
+                                .then(() => makeDatail(osmid, openid))
+                                .catch((error) => {
+                                    console.warn("viewDetail: Failed to load detail libraries.", error);
+                                    reject(error);
+                                });
+                        } else {
+                            console.log("viewDatail: Cancel.");
+                            reject()
+                        }
+                    }
+                });
+            } else {
+                this.loadDetailLibraries()
+                    .then(() => makeDatail(osmid, openid))
+                    .catch((error) => {
+                        console.warn("viewDetail: Failed to load detail libraries.", error);
+                        reject(error);
+                    });
+            }
+        })
+    }
+
+    syncPoiStatus(osmid) {
+        osmid = poiStatusCont.getStatusId(osmid);
+        const record = poiStatusCont.getRecord(osmid);
+        for (const kind of ["visited", "favorite"]) {
+            const button = document.getElementById(kind);
+            if (!button || button.name !== osmid) continue;
+            button.setAttribute("aria-pressed", String(record[kind]));
+            button.querySelector("i")?.classList.toggle("fa-solid", record[kind]);
+            button.querySelector("i")?.classList.toggle("fa-regular", !record[kind]);
+        }
+    }
+
+    togglePoiStatus(id) {
+        const button = document.getElementById(id);
+        if (!button) return;
+        const pressed = button.getAttribute("aria-pressed") !== "true";
+        button.setAttribute("aria-pressed", String(pressed));
+        button.querySelector("i").classList.toggle("fa-solid", pressed);
+        button.querySelector("i").classList.toggle("fa-regular", !pressed);
+        this.savePoiStatus(true);
+    }
+
+    savePoiStatus(refreshMarkers = false) {
+        if (!Conf.etc.localSave) return;
+        const visited = document.getElementById("visited");
+        const favorite = document.getElementById("favorite");
+        const memo = document.getElementById("visited-memo");
+        if (!visited || !favorite) return;
+        const memoValue = memo?.value ?? poiStatusCont.getRecord(visited.name).memo;
+        poiStatusCont.setValueByOSMID(visited.name, visited.getAttribute("aria-pressed") === "true", favorite.getAttribute("aria-pressed") === "true", memoValue);
+        if (refreshMarkers) {
+            this.viewPoi(listTable.getSelCategory());
+            listTable.renderList();
+        }
+    }
+
+    clearDatail() {
+        const visited = document.getElementById("visited")
+        const favorite = document.getElementById("favorite")
+        const memo = document.getElementById("visited-memo")
+        const mmap = document.getElementById("mini-map")
+        const menu = document.getElementById("btnMenu")
+        const detailMenu = document.getElementById("detailMenu")
+        if (Conf.etc.localSave !== "" && visited !== null) {    // 訪問機能が有効＆訪問済みチェックの場合
+            this.savePoiStatus()
+            cMapMaker.eventMoveMap()                            // アイコン表示を更新
+        }
+        mmap.classList.add("d-none")
+        detailMenu.classList.add("d-none")
+        winCont.setDetailHeaderMode(false)
+
+        if (this.status !== "initialize") {
+            const selectedCategory = listTable.getSelCategory().join(",");
+            const catname = selectedCategory !== "" && selectedCategory !== "-"
+                ? `?category=${encodeURIComponent(selectedCategory)}` : "";
+            const modeQuery = Conf.etc.editMode && this.editModeSwitchEnabled
+                ? `${catname ? "&" : "?"}edit=true` : "";
+            history.replaceState('', '', this.withIndoorLevel(location.pathname + catname + modeQuery) + location.hash)
+        }
+        this.openOSMid = null
+        this.detail = false
+        btmWindow_title.innerHTML = ""
+        btmWindow_message.innerHTML = ""
+        return winCont.setSidebar()
+    }
+
+    getDirectionsUrl(osmid) {
+        if (Conf.directions?.use !== true) return "";
+        const linker = window.areaFeatureLinker;
+        const areaId = linker?.resolveAreaId(osmid) || osmid;
+        const area = linker?.getAreaRecord(osmid);
+        const positions = [poiCont.get_osmid(areaId)?.lnglat,
+            area ? [area.lng, area.lat] : null, poiCont.get_osmid(osmid)?.lnglat];
+        for (const position of positions) {
+            if (!Array.isArray(position) || position.length < 2
+                || position.slice(0, 2).some(value => value == null || String(value).trim() === "")) continue;
+            const [lng, lat] = position.map(Number);
+            if (!Number.isFinite(lng) || !Number.isFinite(lat) || Math.abs(lng) > 180 || Math.abs(lat) > 90) continue;
+            const url = new URL("https://www.google.com/maps/dir/");
+            url.searchParams.set("api", "1");
+            url.searchParams.set("destination", `${lat},${lng}`);
+            return url.href;
+        }
+        return "";
+    }
+
+    async shareURL(actid) { // URL共有機能
+        const url = new URL(Conf.etc.publicUrl || location.origin + location.pathname);
+        url.search = location.search;
+        if (actid !== undefined && Conf.activity?.chronology) {
+            if (this.openOSMid) {
+                const params = location.search.slice(1).split("&").slice(1);
+                url.search = [`${this.openOSMid}.${actid}`, ...params].join("&");
+            } else {
+                url.searchParams.set("activity", actid);
+            }
+        } else if (actid !== undefined) {
+            url.search += "." + actid;
+        }
+        url.hash = location.hash;
+        try {
+            await navigator.clipboard.writeText(url.href);
+            winCont.showMessage(glot.get("share_url_copied"));
+            return true;
+        } catch (_) {
+            window.prompt(glot.get("share_url_copy_failed"), url.href);
+            return false;
+        }
+    }
+
+    playback() {
+        const stop = () => {
+            clearTimeout(this.playbackTimer);
+            listTable.disabled(false);
+            this.status = "normal";
+            list_playback.className = "fas fa-play";
+            this.eventMoveMap();
+        };
+        if (this.status === "playback") {
+            stop();
+            return;
+        }
+
+        const rows = listTable.getDisplayList();
+        if (!rows.length || this.status !== "normal") return;
+        const delay = () => (Number(list_speed.value) / 100) * Conf.listTable.playback.timer + 100;
+        const step = index => {
+            if (index === rows.length) {
+                stop();
+                return;
+            }
+            listTable.select(rows[index][0], false);
+            this.playbackTimer = setTimeout(step, delay(), index + 1);
+        };
+        listTable.disabled(true);
+        this.changeMode("list");
+        this.status = "playback";
+        mapLibre.setZoom(Conf.listTable.playback.zoomLevel);
+        list_playback.className = "fas fa-stop";
+        this.playbackTimer = setTimeout(step, delay(), 0);
+    }
+
+    download() {
+        const linkid = "temp_download";
+
+        const originalLists = listTable.getFilterList();
+
+        if (originalLists.length == 0) {
+            globalMessage.innerHTML = glot.get("noDataDownload");
+            setTimeout(() => { globalMessage.innerHTML = ""; }, 4000);
+        } else {
+            const lists = listTable.getExportData();
+            const csv = basic.makeArray2CSV(lists);
+            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+            const blob = new Blob([bom, csv], { type: "text/csv" });
+            const link = document.getElementById(linkid) ? document.getElementById(linkid) : document.createElement("a");
+            link.id = linkid;
+            link.href = URL.createObjectURL(blob);
+            link.download = "my_data.csv";
+            link.dataset.downloadurl = ["text/plain", link.download, link.href].join(":");
+            document.body.appendChild(link);
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+        return;
+    }
+
+    // EVENT: イメージを選択した時のイベント処理
+    eventViewThumb(imgdom) {
+        console.log("eventViewThumb: Start.");
+
+        imgdom = imgdom.closest?.(".thumbnail-card")?.querySelector("img") ?? imgdom;
+        const osmid = imgdom.getAttribute("osmid");
+        const poi = poiCont.get_osmid(osmid);
+        const zoomlv = Math.max(mapLibre.getZoom(true), Conf.map.detailZoom);
+
+        if (zoomlv === undefined) console.log("No " + Conf.map.detailZoom);
+        if (poi === undefined) return;
+
+        cMapMaker.viewDetail(osmid).then(() => {
+            if (poi.geojson !== undefined) geoCont.flashPolygon(poi.geojson);
+            mapLibre.flyTo(poi.lnglat, zoomlv);
+            console.log("eventViewThumb: View OK.");
+        }).catch((e) => {
+            console.warn("cMapMaker.eventViewThumb: failed", e);
+        })
+    }
+
+    eventStartMoveMap() {
+        if (this.status !== "normal") return;
+        clearTimeout(this.moveMapTimer);
+        this.moveMapTimer = null;
+        this.moveMapPending = true;
+    }
+
+    // Keep only the latest position, and wait for a short quiet period.
+    eventMoveMap() {
+        if (this.status === "playback") {
+            this.viewPoi(listTable.getSelCategory());
+            return;
+        }
+        if (this.status !== "normal") return;
+        this.lastMapMoveEnd = Date.now();
+        this.moveMapPending = true;
+        this.scheduleMoveMapUpdate();
+    }
+
+    scheduleMoveMapUpdate() {
+        clearTimeout(this.moveMapTimer);
+        this.moveMapTimer = null;
+        if (this.status !== "normal" || !this.moveMapPending || this.activeViewUpdate) return;
+        // moveend can be dispatched before the input handler clears isMoving().
+        // Keep a recheck scheduled: a second moveend is not guaranteed.
+        const minimumDelay = mapLibre.map?.isMoving?.() ? 50 : 0;
+        const remaining = Math.max(minimumDelay, this.lastMapMoveEnd + MAP_MOVE_SETTLE_DELAY_MS - Date.now());
+        this.moveMapTimer = setTimeout(() => {
+            this.moveMapTimer = null;
+            if (this.status !== "normal" || !this.moveMapPending || this.activeViewUpdate) return;
+            if (mapLibre.map?.isMoving?.()) {
+                this.scheduleMoveMapUpdate();
+                return;
+            }
+            // A newer moveend can have reset the quiet-period deadline.
+            if (Date.now() < this.lastMapMoveEnd + MAP_MOVE_SETTLE_DELAY_MS) {
+                this.scheduleMoveMapUpdate();
+                return;
+            }
+            this.flushMoveMapUpdate();
+        }, remaining);
+    }
+
+    flushMoveMapUpdate() {
+        this.moveMapPending = false;
+        void this.refreshChangeRegion();
+
+        const zoom = mapLibre.getZoom(false);
+        const zoomLevels = Object.keys(Conf.poiView.poiZoom).map(target => this.getPoiZoom(target));
+        if (Conf.etc.editMode) zoomLevels.push(...Object.values(Conf.poiView.editZoom))
+        const poizoom = zoomLevels.some(level => zoom >= level);
+
+        if (!poizoom && !this.usesActivityBbox()
+            && !(areaSearchController.activeCriteria && areaSearchController.usesSearchApi())) {
+            console.log("eventMoveMap: Cancel(Busy or MoreZoom).");
+            this.makeImages(false);                             // イメージリストを非表示
+            this.viewIndoor();
+            this.viewPoi(listTable.getSelCategory());
+            return;
+        }
+        this.updateView()
+            .catch((e) => {
+                console.warn("cMapMaker.eventMoveMap: updateView failed", e);
+            });
+    }
+
+    // EVENT: カテゴリ変更時のイベント
+    eventChangeCategory() {
+        list_keyword.value = "";
+        this.resetKeywordSearchState();
+        let catname, selcategory = listTable.getSelCategory()
+        console.log("eventChange: " + selcategory)
+        const listAccordion = document.getElementById("listAccordion")
+        if (listAccordion && !listAccordion.classList.contains("show")) {
+            basic.openAccordion("listAccordion")
+        }
+        switch (Conf.selectItem.action) {
+            case "ChangeMap":                               // 背景地図切り替え
+                this.showMapTitleWhenReady(mapLibre.changeMap(list_category.value))
+                newsTicker.update()
+                break;
+            case "ChangePoi":
+                this.refreshLocalFilters();
+                cMapMaker.updateView()
+                break;
+            default:
+                this.refreshLocalFilters();
+                break;
+        }
+        catname = selcategory !== "-" ? `?category=${selcategory}` : ""
+        const modeQuery = Conf.etc.editMode && this.editModeSwitchEnabled
+            ? `${catname ? "&" : "?"}edit=true` : "";
+        history.replaceState('', '', this.withIndoorLevel(location.pathname + catname + modeQuery) + location.hash)
+        cMapMaker.clearDatail()
+        geoCont.writePoiCircle()
+        mapLibre.map.redraw()
+        areaSearchController.renderDisplayStatus();
+
+    }
+
+    // EVENT: View Zoom Level & Status Comment
+    eventZoomMap() {
+        let morezoom = 0;
+        for (let key of Object.keys(Conf.poiView.poiZoom)) {
+            const value = this.getPoiZoom(key);
+            morezoom = value >= morezoom ? value : morezoom
+        }
+        if (Conf.etc.editMode) {
+            for (let [key, value] of Object.entries(Conf.poiView.editZoom)) {
+                morezoom = value >= morezoom ? value : morezoom
+            }
+        }
+        const configuredMessageZoom = Number(Conf.map?.zoomMessageThreshold);
+        if (Number.isFinite(configuredMessageZoom)
+            && configuredMessageZoom >= 0 && configuredMessageZoom <= 24) {
+            morezoom = configuredMessageZoom;
+        }
+        let poizoom = mapLibre.getZoom(true) >= morezoom ? false : true
+        if (poizoom) {
+            cMapMaker.changeMode("list")    // ズームレベルがpoi表示の閾値以下の時はリストを開く
+            cMapMaker.clearDatail()         // 詳細画面を閉じる
+        }
+        winCont.setMapStatus("");
+        areaSearchController.renderDisplayStatus();
+    }
+}
+const cMapMaker = new CMapMaker();
+window.cMapMaker = cMapMaker;

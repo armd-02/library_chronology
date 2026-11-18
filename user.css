@@ -1,0 +1,157 @@
+#mini-map {
+    background-color: #050b18;
+    background-image:
+        radial-gradient(circle at 18px 24px, #ffffffd9 0 0.8px, transparent 1.5px),
+        radial-gradient(circle at 79px 63px, #c9ddffa6 0 0.6px, transparent 1.3px),
+        radial-gradient(circle at 45px 107px, #ffffff80 0 0.7px, transparent 1.4px),
+        radial-gradient(circle at 132px 38px, #ffffffb3 0 0.9px, transparent 1.6px),
+        radial-gradient(ellipse at 75% 20%, #152446 0%, transparent 65%);
+    background-size: 151px 137px, 193px 173px, 227px 191px, 283px 229px, 100% 100%;
+}
+
+span.title {
+    display: inline-block;
+    font-size: 16px !important;
+    font-weight: bold;
+    color: black !important;
+    padding: 0px 4px 0px 0px;
+    margin: 0px 0px 0px 0px;
+}
+
+span.subtitle {
+    display: inline-block;
+    font-size: 12px !important;
+    color: black !important;
+    padding: 0px 0px 0px 0px;
+}
+
+span.icon {
+    border-radius: 8px;
+    margin-left: 2px;
+    padding: 0px 2px;
+    white-space: nowrap;
+}
+
+span.attention {
+    color: #000000;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+span.visited {
+    color: #000000;
+    background: rgba(255, 255, 255, 0.3);
+}
+
+span.normal {
+    color: #000000;
+    background: rgba(255, 255, 255, 0.3);
+}
+
+img.thumbnail {
+    margin: 4px auto !important;
+    border: 4px solid #ffffff;
+    display: block;
+    box-shadow: 2px 2px 2px rgb(0 0 0 / 60%);
+    cursor: zoom-in;
+    width: 60%;
+    height: auto;
+    max-height: 35vh;
+    object-fit: contain;
+}
+
+img.slide {
+    height: 9vh;
+    max-width: 100% !important;
+    margin: 2px;
+    border: 2px solid #ffffff;
+    display: block;
+    box-shadow: 2px 2px 2px rgb(0 0 0 / 60%);
+    cursor: grab;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+}
+
+#maplist {
+    margin-bottom: 12px;
+}
+
+/* Place map controls beside the thumbnails instead of above their spacer. */
+#mapid {
+    --map-controls-width: 48px;
+}
+
+#mapid #dummy {
+    display: none;
+}
+
+#mapid #images.showcase {
+    width: calc(100% - var(--map-controls-width));
+    max-width: calc(100% - var(--map-controls-width));
+}
+
+/* Reserve room for status icons only beside the first lines of each card. */
+#listArea .list-facility-item {
+    padding-right: .75rem;
+}
+
+#listArea .list-facility-item > .list-detail-button > .row {
+    display: flow-root;
+    padding-left: 36px;
+}
+
+#listArea .list-facility-item > .list-detail-button > .row::before {
+    content: "";
+    float: right;
+    width: 5.25rem;
+    height: 40px;
+}
+
+/* Compact list text without shrinking the visited/favorite touch targets. */
+#listArea .list-facility-item .list-detail-button .align-middle {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+/* Keep the display selector next to the facility-list heading. */
+#listHeader .detailTitle {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+#listHeader .place-list-mode {
+    flex: 0 1 8.5rem;
+    margin-inline: .75rem .5rem;
+}
+
+#listHeader #listDisplayMode {
+    min-width: 0;
+}
+
+.place-list-toolbar:has(> #placeDiscovery[hidden]) {
+    display: none !important;
+}
+
+@media (min-width: 1080px) {
+    #bottom-pane.sidebar-minimized #listHeader .place-list-mode {
+        display: none !important;
+    }
+}
+
+#bottom-pane,
+.basemenu,
+#main_menu,
+#btnMenu {
+    background-color: #faf5eb;
+    background-image: var(--bg-url, none);
+    background-repeat: repeat;
+    background-size: 520px auto;
+    background-position: left top;
+}
+
+#listPanel {
+    background-color: transparent;
+}
+
+#listArea .list-group {
+    --bs-list-group-bg: rgba(255, 255, 255, 0.72);
+}

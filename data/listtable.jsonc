@@ -1,0 +1,25 @@
+{
+    "list": {
+        "columns": {
+            "style": [
+                {
+                    "className": "col-12",
+                    "icon": true
+                },
+                {
+                    "className": "col-12"
+                }
+            ],
+            "poiFields": [
+                "id",
+                "#name",
+                "chronologyDate"
+            ],
+            "actFields": [
+                "id",
+                "title",
+                "chronologyDate"
+            ]
+        }
+    }
+}
