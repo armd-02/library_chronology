@@ -34,7 +34,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.min.css" />
     <link rel="stylesheet" href="system.css?ver=20261118-library-02" />
-<script type="module" src="./loader.module.js?ver=20261119-library-17"></script>
+<script type="module" src="./loader.module.js?ver=20261119-library-32"></script>
 </head>
 
 <body>
@@ -138,16 +138,20 @@
                                     </div>
                                 </div>
                                 <p id="placePurposeNotice" class="place-purpose-notice" role="status" hidden></p>
+                                <!-- プレイバック操作 -->
+                                <div class="col-12 d-flex align-items-center gap-2 px-2 py-1" id="list_playback_control">
+                                    <input type="range" class="form-range flex-grow-1" id="list_position"
+                                        min="0" max="10000" value="0" aria-label="年表の位置" aria-controls="listArea" disabled>
+                                    <button type="button" class="btn btn-light border-secondary flex-shrink-0"
+                                        aria-label="年表を再生" onclick="cMapMaker.playback();">
+                                        <i id="list_playback" class="fas fa-play" aria-hidden="true"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-light border-secondary flex-shrink-0"
+                                        id="list_playback_speed" aria-label="再生速度 ×1" title="再生速度">×1</button>
+                                </div>
+
                                 <!-- リスト -->
                                 <div class="col-12 p-0" id="listArea"></div>
-
-                                <!-- プレイバック操作 -->
-                                <div class="col-12 d-flex align-items-center" id="list_playback_control">
-                                    <button class="btn btn-light float-left border-secondary ms-2 me-2"
-                                        onclick="cMapMaker.playback();"><i id="list_playback"
-                                            class="fas fa-play"></i></button>
-                                    <input type="range" class="form-range me-2" id="list_speed" />
-                                </div>
 
                                 <!-- ダウンロード -->
                                 <div class="col-12 text-center" id="list_download">

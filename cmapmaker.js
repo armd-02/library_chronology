@@ -6,6 +6,7 @@ var Conf = {}; // Config Praams
 const LANG = window.APP_LANGUAGE || ((window.navigator.languages?.[0] || window.navigator.language || window.navigator.userLanguage || window.navigator.browserLanguage || "en").toLowerCase().startsWith("ja") ? "ja" : "en");
 const MAP_TITLE_DISPLAY_DELAY_MS = 500;
 const MAP_MOVE_SETTLE_DELAY_MS = 300;
+const PLAYBACK_SPEEDS = [1, 2, 4, 8, 0.5];
 async function retryInitialDataLoad(load, label, isCurrent = () => true) {
     const delays = [500, 1500];
     for (let attempt = 0; ; attempt++) {
@@ -118,6 +119,7 @@ class CMapMaker extends IndoorControl {
         this.mapTitleRequestId = 0;
         this.activityRequestId = 0;
         this.lastActivityBbox = null;
+        this.playbackSpeed = 1;
     }
 
     loadDetailLibraries() {
@@ -551,6 +553,7 @@ class CMapMaker extends IndoorControl {
                     newsTicker.init(Conf.news, mapLibre, Conf.tile);
                     cMapMaker.initIndoorControl(UrlParams.level);
                     winCont.playback(Conf.listTable.playback.view); // playback control view:true/false
+                    if (Conf.listTable.playback.view) cMapMaker.initPlaybackControls();
                     winCont.download(Conf.listTable.download); // download view:true/false
                     cMapMaker.changeMode("list");
                     cMapMaker.showMapTitleWhenReady(mapLibre.selectStyle);
@@ -840,7 +843,7 @@ class CMapMaker extends IndoorControl {
         geoCont.writePoiCircle();
         areaSearchController.renderDisplayStatus();
         this.changeMode("list");
-        winCont.setSidebar("list", date ? 0.65 : 0.35);
+        winCont.setSidebar("list", date ? 0.65 : winCont.getSidebarDefaultHeightRatio());
     }
 
     // about Map
@@ -1162,6 +1165,7 @@ class CMapMaker extends IndoorControl {
         console.info(allActivities ? "Activity request (all registrations):"
             : viewportBbox === null ? "Activity BBOX request (full-world fallback):"
                 : "Activity BBOX request (viewport):", url.href);
+        winCont.spinner(true, requestId);
         try {
             const load = () => gSheet.get(url.href, { throwOnError: true });
             const activities = this.lastActivityBbox === null
@@ -1195,6 +1199,8 @@ class CMapMaker extends IndoorControl {
                 winCont.showMessage(glot.get("chronologyLoadFailed"));
             }
             return false;
+        } finally {
+            winCont.spinner(false, requestId);
         }
     }
 
@@ -1430,6 +1436,8 @@ class CMapMaker extends IndoorControl {
     async viewUnmappedActivity(id) {
         const activity = poiCont.get_actid(id);
         if (!activity) return false;
+        if (this.playbackRows) this.playback();
+        this.clearPlaybackEntry();
         await this.loadDetailLibraries();
         await winCont.setSidebar("view");
         this.openOSMid = "";
@@ -1438,7 +1446,7 @@ class CMapMaker extends IndoorControl {
         winCont.menu_make(Conf.menu.modal.slice(0, 1), "btnMenu");
         history.replaceState("", "", location.pathname + "?activity=" + encodeURIComponent(id) + location.hash);
         const notice = `<p class="text-muted">${glot.get("chronologyNoLocation")}</p>`;
-        winCont.makeDetail({ title: glot.get("libc"), message: notice + modalActs.make([activity]), menu: true });
+        winCont.makeDetail({ title: glot.get("libc"), message: notice + modalActs.make([activity]), menu: true, timelineEntries: [activity] });
         this.changeMode("map");
         this.detail = true;
         return true;
@@ -1447,6 +1455,8 @@ class CMapMaker extends IndoorControl {
     // 詳細モーダル表示
     viewDetail(osmid, openid) {	// PopUpを表示(marker,openid=actlst.id)]
         console.log("viewDatail: Start");
+        if (this.playbackRows) this.playback();
+        this.clearPlaybackEntry();
 
         return new Promise((resolve, reject) => {
             const makeFlag = (country) => {     // 旗アイコンを追加
@@ -1529,7 +1539,7 @@ class CMapMaker extends IndoorControl {
                             ${wikimedia.makeWikipediaOverView(tags.wikipedia)}
                         </details>`;
                     }
-                    winCont.makeDetail({ "title": title, "message": message, "append": Conf.menu.activities, "menu": true, "openid": openid });
+                    winCont.makeDetail({ title, message, append: Conf.menu.activities, menu: true, openid, timelineEntries: actlists });
                     mapLibre.viewMiniMap(tags.country)
                     cMapMaker.changeMode("map")
                     this.detail = true
@@ -1611,6 +1621,7 @@ class CMapMaker extends IndoorControl {
     }
 
     clearDatail() {
+        if (this.playbackInDetail) this.playback();
         const mmap = document.getElementById("mini-map")
         const menu = document.getElementById("btnMenu")
         const detailMenu = document.getElementById("detailMenu")
@@ -1681,36 +1692,181 @@ class CMapMaker extends IndoorControl {
         }
     }
 
+    initPlaybackControls() {
+        const pane = document.getElementById("listArea");
+        const accordion = document.getElementById("listAccordion");
+        const slider = document.getElementById("list_position");
+        const speedButton = document.getElementById("list_playback_speed");
+        let lastScrollTop = 0;
+        const scrollRange = () => Math.max(0, pane.scrollHeight - pane.clientHeight);
+        const scrollToSlider = (value = Number(slider.value)) => {
+            pane.scrollTo({ top: value / Number(slider.max) * scrollRange(), behavior: "instant" });
+        };
+        const syncSlider = () => {
+            if (slider.closest("#detailMenu") || !accordion.classList.contains("show")) return;
+            const range = scrollRange();
+            lastScrollTop = pane.scrollTop;
+            slider.disabled = range === 0 || !listTable.getDisplayList().length;
+            list_playback.parentElement.disabled = !listTable.getDisplayList().length;
+            slider.value = range ? Math.round(lastScrollTop / range * Number(slider.max)) : 0;
+        };
+        accordion.addEventListener("shown.bs.collapse", () => {
+            pane.scrollTo({ top: lastScrollTop, behavior: "instant" });
+            syncSlider();
+        });
+        pane.addEventListener("scroll", syncSlider, { passive: true });
+        new ResizeObserver(syncSlider).observe(pane);
+        new MutationObserver(syncSlider).observe(pane, {
+            childList: true, attributes: true, attributeFilter: ["aria-busy"]
+        });
+
+        slider.addEventListener("input", () => {
+            if (slider.closest("#detailMenu")) return;
+            scrollToSlider();
+            if (this.status === "playback") {
+                this.playbackRows = listTable.getDisplayList();
+                this.playbackIndex = this.getPlaybackStartIndex();
+                this.schedulePlaybackStep();
+            }
+        });
+        slider.addEventListener("change", () => {
+            if (slider.closest("#detailMenu")) {
+                const index = Math.round(Number(slider.value) / Number(slider.max) * (this.detailPlaybackHeadings.length - 1));
+                this.showDetailPlaybackEntry(index);
+                if (this.playbackInDetail) {
+                    this.playbackIndex = index + 1;
+                    this.schedulePlaybackStep();
+                }
+                return;
+            }
+            if (!Conf.activity?.chronology) return;
+            if (this.status === "playback") {
+                this.schedulePlaybackStep(0);
+            } else if (this.status === "normal") {
+                const row = listTable.getDisplayList()[this.getPlaybackStartIndex()];
+                if (row) this.showPlaybackEntry(row[0]);
+            }
+        });
+        speedButton.addEventListener("click", () => {
+            const next = (PLAYBACK_SPEEDS.indexOf(this.playbackSpeed) + 1) % PLAYBACK_SPEEDS.length;
+            this.playbackSpeed = PLAYBACK_SPEEDS[next];
+            speedButton.textContent = `×${this.playbackSpeed}`;
+            speedButton.setAttribute("aria-label", `再生速度 ${speedButton.textContent}`);
+            if (this.playbackRows) this.schedulePlaybackStep();
+        });
+    }
+
+    setDetailPlaybackEntries(entries, openid) {
+        this.detailPlaybackHeadings = entries
+            .map(entry => document.getElementById(entry.id.replace("/", "")))
+            .filter(Boolean);
+        const selectedId = openid?.replace("/", "");
+        this.detailPlaybackIndex = Math.max(0, this.detailPlaybackHeadings.findIndex(heading => heading.id === selectedId));
+        const slider = document.getElementById("list_position");
+        const lastIndex = this.detailPlaybackHeadings.length - 1;
+        slider.disabled = lastIndex < 1;
+        list_playback.parentElement.disabled = lastIndex < 0;
+        slider.value = lastIndex > 0 ? Math.round(this.detailPlaybackIndex / lastIndex * Number(slider.max)) : 0;
+    }
+
+    showDetailPlaybackEntry(index) {
+        const heading = this.detailPlaybackHeadings[index];
+        if (!heading) return;
+        this.detailPlaybackHeadings[this.detailPlaybackIndex]?.removeAttribute("aria-current");
+        this.detailPlaybackIndex = index;
+        heading.setAttribute("aria-current", "true");
+        const slider = document.getElementById("list_position");
+        const lastIndex = this.detailPlaybackHeadings.length - 1;
+        slider.value = lastIndex > 0 ? Math.round(index / lastIndex * Number(slider.max)) : 0;
+        const pane = document.getElementById("detailArea");
+        const offset = heading.getBoundingClientRect().top - pane.getBoundingClientRect().top;
+        const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth";
+        pane.scrollBy({ top: offset, behavior });
+    }
+
+    getPlaybackStartIndex() {
+        const pane = document.getElementById("listArea");
+        const rows = document.querySelector("#listArea .list-group")?.children;
+        if (!rows?.length || pane.scrollTop < 1) return 0;
+        if (pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 1) return rows.length - 1;
+
+        const viewportTop = pane.getBoundingClientRect().top;
+        let start = 0;
+        let end = rows.length - 1;
+        while (start < end) {
+            const middle = Math.floor((start + end) / 2);
+            if (rows[middle].getBoundingClientRect().bottom <= viewportTop + 1) start = middle + 1;
+            else end = middle;
+        }
+        return start;
+    }
+
+    schedulePlaybackStep(delay = Conf.listTable.playback.timer / this.playbackSpeed) {
+        clearTimeout(this.playbackTimer);
+        this.playbackTimer = setTimeout(() => {
+            const row = this.playbackRows[this.playbackIndex];
+            if (!row) {
+                this.playback();
+                return;
+            }
+            if (this.playbackInDetail) this.showDetailPlaybackEntry(this.playbackIndex);
+            else if (Conf.activity?.chronology) this.showPlaybackEntry(row[0]);
+            else listTable.select(row[0], false);
+            this.playbackIndex++;
+            this.schedulePlaybackStep();
+        }, delay);
+    }
+
+    clearPlaybackEntry() {
+        listTable.clearPlaybackEntry();
+        mapLibre.setPlaybackMarker(null);
+    }
+
+    showPlaybackEntry(id) {
+        const activity = poiCont.get_actid(id);
+        const poi = poiCont.get_osmid(activity?.osmid ?? id);
+        const coordinates = poi?.lnglat;
+        const lines = [["agency", "libc_agency"], ["area", "libc_area"]]
+            .filter(([field]) => String(activity?.[field] ?? "").trim())
+            .map(([field, label]) => `${glot.get(label)}　${activity[field]}`);
+        if (!coordinates) lines.push(glot.get("chronologyNoLocation"));
+        listTable.showPlaybackEntry(id, lines);
+        if (!coordinates) {
+            mapLibre.setPlaybackMarker(null);
+            return;
+        }
+        mapLibre.setPlaybackMarker(coordinates, poiCont.getIcon(poi.geojson.properties));
+        mapLibre.panTo(coordinates, Math.min(400, Conf.listTable.playback.timer / this.playbackSpeed / 2));
+    }
+
     playback() {
-        const stop = () => {
+        const button = list_playback.parentElement;
+        if (this.playbackRows) {
+            const wasInDetail = this.playbackInDetail;
             clearTimeout(this.playbackTimer);
+            this.playbackRows = null;
+            this.playbackInDetail = false;
             listTable.disabled(false);
             this.status = "normal";
             list_playback.className = "fas fa-play";
-            this.eventMoveMap();
-        };
-        if (this.status === "playback") {
-            stop();
+            button.setAttribute("aria-label", "年表を再生");
+            if (!wasInDetail) this.eventMoveMap();
             return;
         }
 
-        const rows = listTable.getDisplayList();
+        const inDetail = Boolean(button.closest("#detailMenu"));
+        const rows = inDetail ? this.detailPlaybackHeadings : listTable.getDisplayList();
         if (!rows.length || this.status !== "normal") return;
-        const delay = () => (Number(list_speed.value) / 100) * Conf.listTable.playback.timer + 100;
-        const step = index => {
-            if (index === rows.length) {
-                stop();
-                return;
-            }
-            listTable.select(rows[index][0], false);
-            this.playbackTimer = setTimeout(step, delay(), index + 1);
-        };
+        this.playbackInDetail = inDetail;
+        this.playbackRows = rows;
+        this.playbackIndex = inDetail ? this.detailPlaybackIndex : this.getPlaybackStartIndex();
         listTable.disabled(true);
-        this.changeMode("list");
+        if (!inDetail) this.changeMode("list");
         this.status = "playback";
-        mapLibre.setZoom(Conf.listTable.playback.zoomLevel);
+        if (!inDetail && !Conf.activity?.chronology) mapLibre.setZoom(Conf.listTable.playback.zoomLevel);
         list_playback.className = "fas fa-stop";
-        this.playbackTimer = setTimeout(step, delay(), 0);
+        button.setAttribute("aria-label", "年表を停止");
+        this.schedulePlaybackStep(0);
     }
 
     download() {
@@ -1817,6 +1973,15 @@ class CMapMaker extends IndoorControl {
             this.makeImages(false);                             // イメージリストを非表示
             this.viewIndoor();
             this.viewPoi(listTable.getSelCategory());
+            return;
+        }
+        if ((!this.usesActivityBbox() || this.lastActivityBbox === "all")
+            && listTable.canKeepListOnMapMove()) {
+            if (Conf.changes?.ticker?.use === true) this.showChangeTicker();
+            if (Conf.thumbnail.use) this.makeImages(true);
+            this.viewArea();
+            this.viewPoi(listTable.getSelCategory());
+            feature3d.sync();
             return;
         }
         this.updateView()

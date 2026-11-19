@@ -131,6 +131,101 @@ img.slide {
     display: none !important;
 }
 
+/* Give timeline entries their own scroll area below the playback controls. */
+#btmHeader:has(> #detailMenu.d-none):has(#listAccordion.show) {
+    display: flex;
+    flex-direction: column;
+    overflow: clip;
+}
+
+#btmHeader:has(> #detailMenu.d-none):has(#listAccordion.show) > .footerSpace {
+    display: none;
+}
+
+#listPanel:has(> #listAccordion.show),
+#listAccordion.show,
+#listAccordion.show > .accordion-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#listHeader,
+#list_playback_control {
+    flex-shrink: 0;
+}
+
+#listArea {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+}
+
+#list_playback_control {
+    background-color: #faf5eb;
+}
+
+#btmHeader:has(> #detailMenu:not(.d-none) > #list_playback_control:not(.d-none)),
+#detailMenu:not(.d-none):has(> #list_playback_control:not(.d-none)) {
+    display: flex;
+    flex-direction: column;
+}
+
+#btmHeader:has(> #detailMenu:not(.d-none) > #list_playback_control:not(.d-none)) {
+    overflow: clip;
+}
+
+#detailMenu:not(.d-none):has(> #list_playback_control:not(.d-none)),
+#detailMenu:has(> #list_playback_control:not(.d-none)) > #detailArea {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+#detailHeader {
+    flex-shrink: 0;
+}
+
+#list_position {
+    min-width: 0;
+}
+
+#list_playback_speed {
+    min-width: 3.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+#listArea .list-group-item[aria-current="true"],
+#detailArea h5[aria-current="true"] {
+    background-color: #fff0c5;
+    box-shadow: inset 4px 0 #a95100;
+}
+
+#listArea .list-group-item[aria-current="true"] .list-facility-name {
+    color: #503009;
+    font-weight: 700;
+}
+
+.timeline-entry-details {
+    margin: .4rem 0 0 36px;
+    color: #503009;
+    font-size: .8rem;
+    overflow-wrap: anywhere;
+}
+
+.timeline-map-marker {
+    z-index: 3;
+    width: 52px;
+    height: 52px;
+    padding: 8px;
+    border: 4px solid #ffb000;
+    border-radius: 50%;
+    background: #fff3cc;
+    box-shadow: 0 0 0 2px #352300, 0 2px 8px #0009;
+    pointer-events: none;
+}
+
 @media (min-width: 1080px) {
     #bottom-pane.sidebar-minimized #listHeader .place-list-mode {
         display: none !important;

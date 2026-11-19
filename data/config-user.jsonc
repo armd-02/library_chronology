@@ -39,10 +39,11 @@
         "viewPitch": 0,
         "maxPitch": 60,
         "maxBounds": null,
+        "centerBounds": [[120, 19], [157, 48]],
         "initZoom": 5.5,
         "maxZoom": 12,
         "detailZoom": 5,
-        "zoomMessageThreshold": 5,
+        "zoomMessageThreshold": 3,
         "textFont": [
             "Noto Sans Bold"
         ],
@@ -51,7 +52,7 @@
             "fill-color": "#CC6666",
             "fill-opacity": 0.3
         },
-        "minZoom": 5
+        "minZoom": 3
     },
     "mapIllustrations": {
         "use": false,
@@ -136,7 +137,7 @@
         "openingHours": false,
         "poiActLoad": true,
         "poiZoom": {
-            "activity": 5,
+            "activity": 3,
             "library": 10
         },
         "mobilePoiZoom": {},
@@ -155,7 +156,8 @@
     },
     "sideBar": {
         "everyView": true,
-        "initView": "view"
+        "initView": "view",
+        "defaultHeightRatio": 0.5
     },
     "listTable": {
         "nameFallback": "category",
