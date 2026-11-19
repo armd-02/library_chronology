@@ -57,5 +57,5 @@
 
 ### 2021年10月2日
 
-- 草津お宝マップをベースに、図書館年表マップの初版を作成しました。 [初版](https://github.com/armd-02/library_chronology/commit/e2c27ea)
+- 当時のCommunity Map Makerで作られた「草津お宝マップ」をベースに、図書館年表マップの初版を作成しました。 [初版](https://github.com/armd-02/library_chronology/commit/e2c27ea)
 - 拡大を促す案内が、年表の記録がある施設のアイコン表示条件に連動するよう修正しました。 [案内の修正](https://github.com/armd-02/library_chronology/commit/d19da1c)
